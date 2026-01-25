@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyKnows | Empty States</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: white; overflow: hidden; }
+        .serif { font-family: 'Fraunces', serif; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .ghost-card { background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%); border: 1px dashed rgba(255,255,255,0.1); }
+        .btn-sage { background-color: #88A096; transition: all 0.3s ease; }
+        .btn-sage:active { transform: scale(0.95); }
+        .tab-active { color: white; border-bottom: 2px solid #88A096; }
+    </style>
+</head>
+<body class="max-w-md mx-auto min-h-screen flex flex-col">
+
+    <header class="p-6 flex justify-between items-center">
+        <button class="h-10 w-10 glass rounded-xl flex items-center justify-center text-slate-400">✕</button>
+        <h1 class="serif text-xl">Your Vault</h1>
+        <div class="w-10"></div> </header>
+
+    <nav class="flex px-6 border-b border-white/5">
+        <button onclick="showTab('loans')" id="tab-loans" class="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-slate-500 tab-active">Loans</button>
+        <button onclick="showTab('insurance')" id="tab-insurance" class="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-slate-500">Insurance</button>
+        <button onclick="showTab('renewals')" id="tab-renewals" class="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-slate-500">Renewals</button>
+    </nav>
+
+    <main class="flex-1 flex flex-col justify-center px-8 relative">
+        
+        <section id="content-loans" class="tab-content animate-fade-in">
+            <div class="mb-10 relative">
+                <div class="ghost-card rounded-3xl p-6 w-full opacity-30 transform -rotate-3 translate-y-4">
+                    <div class="h-4 w-24 bg-slate-700 rounded mb-4"></div>
+                    <div class="h-8 w-40 bg-slate-600 rounded"></div>
+                </div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="h-24 w-24 bg-slate-800 rounded-full flex items-center justify-center text-5xl shadow-2xl border border-white/10">🤝</div>
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <h2 class="serif text-2xl mb-3">No Digital Handshakes</h2>
+                <p class="text-slate-400 text-sm leading-relaxed mb-10 px-4">
+                    Lending money to family shouldn't be awkward. Record it here, send an OTP, and get mutual acknowledgement instantly.
+                </p>
+                <button class="w-full btn-sage py-5 rounded-2xl font-bold shadow-lg">Record First Loan</button>
+            </div>
+        </section>
+
+        <section id="content-insurance" class="tab-content hidden animate-fade-in">
+            <div class="mb-10 flex flex-col items-center">
+                <div class="h-28 w-28 bg-slate-800/50 rounded-3xl flex items-center justify-center text-5xl mb-6 border border-white/10">🛡️</div>
+                <h2 class="serif text-2xl mb-3 text-center">Your Safety Net is Empty</h2>
+                <p class="text-slate-400 text-sm leading-relaxed mb-10 text-center">
+                    "Insurance papers at home, medical emergency in Goa." <br>Don't let that be your story. Upload your policies now.
+                </p>
+                <button class="w-full btn-sage py-5 rounded-2xl font-bold shadow-lg">Add Health/Life Policy</button>
+            </div>
+        </section>
+
+        <section id="content-renewals" class="tab-content hidden animate-fade-in">
+            <div class="mb-10 relative px-4">
+                <div class="ghost-card h-16 rounded-2xl mb-3 opacity-20"></div>
+                <div class="ghost-card h-16 rounded-2xl mb-3 opacity-40"></div>
+                <div class="ghost-card h-16 rounded-2xl mb-8 opacity-60"></div>
+                
+                <div class="text-center">
+                    <div class="text-4xl mb-6">📅</div>
+                    <h2 class="serif text-2xl mb-3">Zero Compliance Alerts</h2>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-10">
+                        GHMC, Fire NOC, or Property Tax. These have NO reminder systems. <br>Let FamilyKnows watch the calendar for you.
+                    </p>
+                    <button class="w-full btn-sage py-5 rounded-2xl font-bold shadow-lg">Add First Renewal</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="p-8">
+        <div class="glass rounded-2xl p-4 flex items-center gap-4">
+            <span class="text-amber-500">💡</span>
+            <p class="text-[10px] text-slate-400 italic leading-snug">
+                Pro Tip: Most users start by adding their **Term Life Insurance** or a **Small Loan** to see how the reminders work.
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        function showTab(tabName) {
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+            // Remove active style from all tabs
+            document.querySelectorAll('nav button').forEach(tab => tab.classList.remove('tab-active'));
+            
+            // Show selected content
+            document.getElementById('content-' + tabName).classList.remove('hidden');
+            // Add active style to selected tab
+            document.getElementById('tab-' + tabName).classList.add('tab-active');
+        }
+    </script>
+
+    <style>
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</body>
+</html>

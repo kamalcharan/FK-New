@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyKnows Phase 1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: white; overflow-x: hidden; }
+        .serif { font-family: 'Fraunces', serif; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .bg-emergency { background: linear-gradient(rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.95)), url('https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?auto=format&fit=crop&w=800&q=80'); background-size: cover; background-position: center; }
+        .fade-in { animation: fadeIn 1.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .carousel-indicator { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); transition: all 0.3s; }
+        .carousel-indicator.active { width: 24px; background: #88A096; border-radius: 10px; }
+    </style>
+</head>
+<body class="max-w-md mx-auto min-h-screen relative">
+
+    <section id="screen-1" class="h-screen flex flex-col justify-end p-8 bg-emergency">
+        <div class="mb-12 fade-in">
+            <p class="text-red-400 font-semibold tracking-widest text-xs uppercase mb-4">11:00 PM • Goa Medical Emergency</p>
+            <h1 class="serif text-4xl leading-tight mb-6">"Where is Dad's insurance policy?"</h1>
+            <p class="text-slate-400 text-lg leading-relaxed mb-8">Never be caught without critical documents when they matter most.</p>
+            <button onclick="nextScreen(2)" class="w-full bg-white text-black font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">Secure My Family</button>
+        </div>
+    </section>
+
+    <section id="screen-2" class="hidden h-screen flex flex-col p-8 bg-[#0F172A]">
+        <div class="flex-1 flex flex-col justify-center text-center fade-in">
+            <div class="h-64 w-64 mx-auto mb-12 glass rounded-full flex items-center justify-center text-6xl">🤝</div>
+            <h2 class="serif text-3xl mb-4">The Digital Handshake</h2>
+            <p class="text-slate-400 leading-relaxed mb-8">Lent ₹3L to a cousin? Get OTP-verified proof and prevent family disputes before they happen.</p>
+            
+            <div class="flex justify-center gap-2 mb-12">
+                <div class="carousel-indicator active"></div>
+                <div class="carousel-indicator"></div>
+                <div class="carousel-indicator"></div>
+            </div>
+        </div>
+        <button onclick="nextScreen(3)" class="w-full bg-slate-800 text-white font-bold py-5 rounded-2xl border border-slate-700 active:scale-95 transition mb-8">Next</button>
+    </section>
+
+    <section id="screen-3" class="hidden h-screen flex flex-col justify-center p-8 bg-[#0F172A]">
+        <div class="text-center fade-in">
+            <div class="mb-12">
+                <span class="text-5xl">🛡️</span>
+                <h1 class="serif text-3xl mt-6">FamilyKnows</h1>
+                <p class="text-slate-500 mt-2">Your data is encrypted & private.</p>
+            </div>
+            
+            <button onclick="nextScreen(4)" class="w-full bg-white text-black font-semibold py-4 rounded-2xl flex items-center justify-center gap-3 mb-4 shadow-lg">
+                <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="h-6 w-6" alt="Google">
+                Sign in with Google
+            </button>
+            <p class="text-[10px] text-slate-500 px-8">By signing in, you agree to secure your family's future and our Terms of Service.</p>
+        </div>
+    </section>
+
+    <section id="screen-4" class="hidden h-screen flex flex-col justify-center p-8 bg-[#0F172A]">
+        <div class="fade-in">
+            <h1 class="serif text-3xl mb-2">Build Your Vault</h1>
+            <p class="text-slate-400 mb-10 text-sm">Every family needs a name. What’s yours?</p>
+            
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Vault Name</label>
+                    <input type="text" placeholder="e.g. The Sharma Family" class="w-full bg-slate-900 border border-slate-700 rounded-2xl p-5 mt-2 focus:border-white focus:outline-none transition">
+                </div>
+                
+                <button class="w-full bg-[#88A096] text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition">Create Workspace</button>
+                
+                <div class="relative py-4">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800"></div></div>
+                    <div class="relative flex justify-center text-xs uppercase"><span class="bg-[#0F172A] px-4 text-slate-600 tracking-widest">or</span></div>
+                </div>
+
+                <button class="w-full bg-transparent border border-slate-700 text-slate-400 font-bold py-4 rounded-2xl active:scale-95 transition">Join Existing Vault</button>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        function nextScreen(id) {
+            // Simple logic to hide current and show next with animation
+            const screens = document.querySelectorAll('section');
+            screens.forEach(s => s.classList.add('hidden'));
+            document.getElementById(`screen-${id}`).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
