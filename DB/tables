@@ -1,0 +1,51 @@
+-- Workspaces table to group family members
+CREATE TABLE workspaces (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id)
+);
+
+-- Linking users to workspaces with roles
+CREATE TABLE workspace_members (
+  workspace_id UUID REFERENCES workspaces(id),
+  user_id UUID REFERENCES auth.users(id),
+  role TEXT DEFAULT 'member', -- owner/member
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (workspace_id, user_id)
+);
+
+
+
+CREATE TABLE loans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id),
+  amount DECIMAL NOT NULL,
+  borrower_name TEXT NOT NULL,
+  borrower_phone TEXT NOT NULL,
+  given_date DATE DEFAULT CURRENT_DATE,
+  return_date DATE,
+  otp_verified BOOLEAN DEFAULT FALSE, --
+  verified_at TIMESTAMP WITH TIME ZONE,
+  status TEXT DEFAULT 'pending', -- pending/acknowledged/returned/disputed
+  notes TEXT,
+  created_by UUID REFERENCES auth.users(id)
+);
+
+
+-- Unified table for Vault items
+CREATE TABLE vault_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id),
+  category TEXT NOT NULL, -- 'insurance' or 'renewal'
+  type TEXT NOT NULL, -- health/vehicle/ghmc/fire_noc etc.
+  provider_or_authority TEXT,
+  policy_or_license_num TEXT,
+  expiry_date DATE NOT NULL,
+  premium_or_fee DECIMAL,
+  reminder_days INT DEFAULT 30, -- Default 30 for insurance, 15 for renewals
+  document_url TEXT, -- Link to Supabase Storage
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
