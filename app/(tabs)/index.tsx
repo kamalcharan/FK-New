@@ -55,7 +55,7 @@ export default function DashboardScreen() {
 
         {/* Emergency Access */}
         <Text style={styles.sectionTitle}>FAMILY EMERGENCY ACCESS</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.emergencyScroll}>
+        <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={styles.emergencyScroll}>
           <View style={styles.emergencyCard}>
             <Text style={styles.emergencyIcon}>🚑</Text>
             <Text style={styles.emergencyLabel}>Health</Text>
