@@ -1,29 +1,54 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Link } from 'expo-router';
-import { Colors, Typography } from '../../src/constants/theme';
+import { View, Text, StyleSheet, Image } from 'react-native';
+import { router } from 'expo-router';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { Colors, Typography, Spacing, BorderRadius } from '../../src/constants/theme';
+import { Button } from '../../src/components/ui';
 
 export default function SignInScreen() {
+  const handleGoogleSignIn = () => {
+    // TODO: Implement Google OAuth with Supabase
+    // For now, navigate to workspace setup
+    router.push('/(auth)/workspace-setup');
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.icon}>🛡️</Text>
-        <Text style={styles.title}>FamilyKnows</Text>
-        <Text style={styles.subtitle}>Your data is encrypted & private.</Text>
+        {/* Shield Icon */}
+        <Animated.View entering={FadeIn.delay(200).duration(600)} style={styles.iconWrapper}>
+          <Text style={styles.icon}>🛡️</Text>
+        </Animated.View>
+
+        {/* App Name */}
+        <Animated.View entering={FadeInUp.delay(400).duration(600)}>
+          <Text style={styles.title}>FamilyKnows</Text>
+        </Animated.View>
+
+        {/* Privacy Message */}
+        <Animated.View entering={FadeInUp.delay(500).duration(600)}>
+          <Text style={styles.subtitle}>Your data is encrypted & private.</Text>
+        </Animated.View>
       </View>
 
-      <View style={styles.buttons}>
-        <Pressable style={styles.googleButton}>
-          <Text style={styles.googleButtonText}>Sign in with Google</Text>
-        </Pressable>
+      <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.buttons}>
+        {/* Google Sign In Button */}
+        <Button
+          title="Sign in with Google"
+          variant="white"
+          onPress={handleGoogleSignIn}
+          icon={
+            <Image
+              source={{ uri: 'https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png' }}
+              style={styles.googleIcon}
+            />
+          }
+        />
 
+        {/* Terms */}
         <Text style={styles.terms}>
           By signing in, you agree to secure your family's future and our Terms of Service.
         </Text>
-
-        <Link href="/(auth)/workspace-setup" style={styles.devLink}>
-          <Text style={styles.devLinkText}>[Dev] Skip to Workspace Setup</Text>
-        </Link>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -32,52 +57,42 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    padding: 32,
+    padding: Spacing.xl,
     justifyContent: 'center',
   },
   content: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: Spacing['3xl'],
+  },
+  iconWrapper: {
+    marginBottom: Spacing['2xl'],
   },
   icon: {
-    fontSize: 48,
-    marginBottom: 24,
+    fontSize: 56,
   },
   title: {
-    ...Typography.h1,
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 32,
     color: Colors.text,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   subtitle: {
     ...Typography.body,
     color: Colors.textMuted,
   },
   buttons: {
-    gap: 16,
+    gap: Spacing.md,
   },
-  googleButton: {
-    backgroundColor: Colors.google,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  googleButtonText: {
-    ...Typography.button,
-    color: '#000000',
+  googleIcon: {
+    width: 24,
+    height: 24,
   },
   terms: {
     fontSize: 10,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  devLink: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  devLinkText: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    textDecorationLine: 'underline',
+    paddingHorizontal: Spacing.xl,
+    lineHeight: 16,
   },
 });

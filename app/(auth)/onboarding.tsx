@@ -1,15 +1,87 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { Link } from 'expo-router';
-import { Colors, Typography } from '../../src/constants/theme';
+import { useState, useRef } from 'react';
+import { View, StyleSheet, Dimensions, FlatList, ViewToken } from 'react-native';
+import { router } from 'expo-router';
+import { EmergencySlide, FeatureSlide } from '../../src/components/onboarding';
+import { ONBOARDING_SLIDES } from '../../src/constants/onboarding';
+import { Colors } from '../../src/constants/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function OnboardingScreen() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+
+  const handleNext = () => {
+    if (currentIndex < ONBOARDING_SLIDES.length - 1) {
+      flatListRef.current?.scrollToIndex({
+        index: currentIndex + 1,
+        animated: true,
+      });
+    } else {
+      // Last slide - go to sign in
+      router.push('/(auth)/sign-in');
+    }
+  };
+
+  const handleEmergencyContinue = () => {
+    // Skip to sign in directly from emergency slide
+    router.push('/(auth)/sign-in');
+  };
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+        setCurrentIndex(viewableItems[0].index);
+      }
+    }
+  ).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
+
+  const renderSlide = ({ item, index }: { item: typeof ONBOARDING_SLIDES[0]; index: number }) => {
+    if (item.type === 'emergency') {
+      return (
+        <View style={styles.slide}>
+          <EmergencySlide onContinue={handleEmergencyContinue} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.slide}>
+        <FeatureSlide
+          icon={item.icon || '📄'}
+          title={item.title}
+          subtitle={item.subtitle}
+          currentIndex={index}
+          totalSlides={ONBOARDING_SLIDES.length}
+          onNext={handleNext}
+          isLast={index === ONBOARDING_SLIDES.length - 1}
+        />
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>FamilyKnows</Text>
-      <Text style={styles.subtitle}>Onboarding screens coming soon</Text>
-      <Link href="/(auth)/sign-in" style={styles.link}>
-        <Text style={styles.linkText}>Go to Sign In</Text>
-      </Link>
+      <FlatList
+        ref={flatListRef}
+        data={ONBOARDING_SLIDES}
+        renderItem={renderSlide}
+        keyExtractor={(item) => item.id}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * index,
+          index,
+        })}
+      />
     </View>
   );
 }
@@ -17,29 +89,10 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: Colors.background,
-    padding: 24,
   },
-  title: {
-    ...Typography.h1,
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginBottom: 24,
-  },
-  link: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-  },
-  linkText: {
-    ...Typography.button,
-    color: Colors.text,
+  slide: {
+    width: SCREEN_WIDTH,
+    flex: 1,
   },
 });
