@@ -1,3 +1,4 @@
+// app/(tabs)/index.tsx
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';

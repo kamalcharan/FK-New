@@ -1,3 +1,4 @@
+// src/store/slices/loansSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Loan } from '../../types';
 

@@ -1,3 +1,4 @@
+// src/constants/onboarding.ts
 /**
  * Onboarding slide content
  * Matches the emotional storytelling from the HTML mockups

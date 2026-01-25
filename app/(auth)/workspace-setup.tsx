@@ -1,3 +1,4 @@
+// app/(auth)/workspace-setup.tsx
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { useState } from 'react';

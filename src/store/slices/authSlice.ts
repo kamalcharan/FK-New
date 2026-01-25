@@ -1,3 +1,4 @@
+// src/store/slices/authSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { User, Session } from '../../types';
 

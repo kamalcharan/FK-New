@@ -1,3 +1,4 @@
+// src/components/ui/GlassCard.tsx
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Colors, BorderRadius } from '../../constants/theme';
 

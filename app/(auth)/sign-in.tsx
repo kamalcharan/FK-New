@@ -1,3 +1,4 @@
+// app/(auth)/sign-in.tsx
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Colors, Typography, Spacing } from '../../src/constants/theme';

@@ -1,3 +1,4 @@
+// app/(auth)/onboarding.tsx
 import { useState, useRef } from 'react';
 import { View, StyleSheet, Dimensions, FlatList, ViewToken } from 'react-native';
 import { router } from 'expo-router';

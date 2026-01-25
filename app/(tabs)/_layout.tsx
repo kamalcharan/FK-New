@@ -1,3 +1,4 @@
+// app/(tabs)/_layout.tsx
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors, Typography } from '../../src/constants/theme';

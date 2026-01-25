@@ -1,3 +1,4 @@
+// src/components/onboarding/CarouselIndicator.tsx
 import { View, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/theme';
 

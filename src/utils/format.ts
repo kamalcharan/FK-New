@@ -1,3 +1,4 @@
+// src/utils/format.ts
 /**
  * Format currency in Indian Rupee format
  */

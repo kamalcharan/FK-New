@@ -1,3 +1,4 @@
+// src/store/slices/workspaceSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Workspace, WorkspaceMember } from '../../types';
 

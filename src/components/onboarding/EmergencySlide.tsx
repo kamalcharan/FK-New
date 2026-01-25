@@ -1,3 +1,4 @@
+// src/components/onboarding/EmergencySlide.tsx
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Typography, Spacing } from '../../constants/theme';

@@ -1,3 +1,4 @@
+// src/components/onboarding/FeatureSlide.tsx
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { GlassView } from '../ui/GlassCard';

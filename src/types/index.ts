@@ -1,3 +1,4 @@
+// src/types/index.ts
 /**
  * FamilyKnows TypeScript Types
  * Based on Supabase database schema

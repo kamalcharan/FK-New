@@ -1,3 +1,4 @@
+// src/constants/theme.ts
 /**
  * FamilyKnows Design System
  * Extracted from HTML mockups for pixel-perfect implementation
