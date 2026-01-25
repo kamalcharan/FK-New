@@ -1,7 +1,6 @@
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui';
 
@@ -20,12 +19,12 @@ export default function WorkspaceSetupScreen() {
 
   return (
     <View style={styles.container}>
-      <Animated.View entering={FadeInUp.delay(200).duration(600)}>
+      <View>
         <Text style={styles.title}>Build Your Vault</Text>
         <Text style={styles.subtitle}>Every family needs a name. What's yours?</Text>
-      </Animated.View>
+      </View>
 
-      <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.form}>
+      <View style={styles.form}>
         {/* Vault Name Input */}
         <View>
           <Text style={styles.label}>VAULT NAME</Text>
@@ -66,7 +65,7 @@ export default function WorkspaceSetupScreen() {
           variant="secondary"
           onPress={handleJoinWorkspace}
         />
-      </Animated.View>
+      </View>
     </View>
   );
 }

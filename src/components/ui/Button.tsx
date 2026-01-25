@@ -1,8 +1,5 @@
 import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Colors, Typography, BorderRadius } from '../../constants/theme';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'white';
 
@@ -27,20 +24,6 @@ export function Button({
   textStyle,
   icon,
 }: ButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.95, { damping: 15, stiffness: 400 });
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 400 });
-  };
-
   const buttonStyles = [
     styles.base,
     styles[variant],
@@ -56,11 +39,12 @@ export function Button({
   ];
 
   return (
-    <AnimatedPressable
-      style={[buttonStyles, animatedStyle]}
+    <Pressable
+      style={({ pressed }) => [
+        buttonStyles,
+        pressed && styles.pressed,
+      ]}
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
       disabled={disabled || loading}
     >
       {loading ? (
@@ -74,7 +58,7 @@ export function Button({
           <Text style={textStyles}>{title}</Text>
         </>
       )}
-    </AnimatedPressable>
+    </Pressable>
   );
 }
 
@@ -87,6 +71,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: BorderRadius['2xl'],
     gap: 12,
+  },
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   primary: {
     backgroundColor: Colors.primary,

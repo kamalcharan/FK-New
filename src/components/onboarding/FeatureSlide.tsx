@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { GlassView } from '../ui/GlassCard';
 import { CarouselIndicator } from './CarouselIndicator';
@@ -30,36 +29,30 @@ export function FeatureSlide({
     <View style={styles.container}>
       <View style={styles.content}>
         {/* Icon Circle */}
-        <Animated.View entering={FadeIn.delay(200).duration(600)}>
-          <GlassView style={styles.iconContainer} borderRadius={999}>
-            <Text style={styles.icon}>{icon}</Text>
-          </GlassView>
-        </Animated.View>
+        <GlassView style={styles.iconContainer} borderRadius={999}>
+          <Text style={styles.icon}>{icon}</Text>
+        </GlassView>
 
         {/* Title */}
-        <Animated.View entering={FadeInUp.delay(400).duration(600)}>
-          <Text style={styles.title}>{title}</Text>
-        </Animated.View>
+        <Text style={styles.title}>{title}</Text>
 
         {/* Subtitle */}
-        <Animated.View entering={FadeInUp.delay(500).duration(600)}>
-          <Text style={styles.subtitle}>{subtitle}</Text>
-        </Animated.View>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
         {/* Carousel Indicators */}
-        <Animated.View entering={FadeIn.delay(600).duration(600)} style={styles.indicators}>
+        <View style={styles.indicators}>
           <CarouselIndicator total={totalSlides} currentIndex={currentIndex} />
-        </Animated.View>
+        </View>
       </View>
 
       {/* Button */}
-      <Animated.View entering={FadeInUp.delay(700).duration(600)} style={styles.buttonContainer}>
+      <View style={styles.buttonContainer}>
         <Button
           title={isLast ? "Get Started" : "Next"}
           variant="ghost"
           onPress={onNext}
         />
-      </Animated.View>
+      </View>
     </View>
   );
 }

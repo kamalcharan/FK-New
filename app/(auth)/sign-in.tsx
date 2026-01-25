@@ -1,7 +1,6 @@
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { router } from 'expo-router';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { Colors, Typography, Spacing, BorderRadius } from '../../src/constants/theme';
+import { Colors, Typography, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui';
 
 export default function SignInScreen() {
@@ -15,22 +14,18 @@ export default function SignInScreen() {
     <View style={styles.container}>
       <View style={styles.content}>
         {/* Shield Icon */}
-        <Animated.View entering={FadeIn.delay(200).duration(600)} style={styles.iconWrapper}>
+        <View style={styles.iconWrapper}>
           <Text style={styles.icon}>🛡️</Text>
-        </Animated.View>
+        </View>
 
         {/* App Name */}
-        <Animated.View entering={FadeInUp.delay(400).duration(600)}>
-          <Text style={styles.title}>FamilyKnows</Text>
-        </Animated.View>
+        <Text style={styles.title}>FamilyKnows</Text>
 
         {/* Privacy Message */}
-        <Animated.View entering={FadeInUp.delay(500).duration(600)}>
-          <Text style={styles.subtitle}>Your data is encrypted & private.</Text>
-        </Animated.View>
+        <Text style={styles.subtitle}>Your data is encrypted & private.</Text>
       </View>
 
-      <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.buttons}>
+      <View style={styles.buttons}>
         {/* Google Sign In Button */}
         <Button
           title="Sign in with Google"
@@ -48,7 +43,7 @@ export default function SignInScreen() {
         <Text style={styles.terms}>
           By signing in, you agree to secure your family's future and our Terms of Service.
         </Text>
-      </Animated.View>
+      </View>
     </View>
   );
 }
