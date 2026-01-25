@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyKnows | Onboarding</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: white; }
+        .serif { font-family: 'Fraunces', serif; }
+        .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1.25rem; }
+        .btn-sage { background-color: #88A096; }
+    </style>
+</head>
+<body class="max-w-md mx-auto min-h-screen p-8 flex flex-col justify-center">
+
+    <section id="onboard-1" class="space-y-8 animate-fade-in">
+        <header>
+            <h1 class="serif text-3xl mb-2">Complete your profile</h1>
+            <p class="text-sm text-slate-400 leading-relaxed">This info helps your family and borrowers identify you during a 'Handshake'.</p>
+        </header>
+
+        <div class="space-y-4">
+            <div class="glass-input p-1">
+                <label class="text-[10px] uppercase font-bold text-slate-500 ml-4 mt-2 block">Full Name</label>
+                <input type="text" value="Arjun Sharma" class="w-full bg-transparent p-4 pt-1 text-sm outline-none">
+            </div>
+            <div class="glass-input p-1">
+                <label class="text-[10px] uppercase font-bold text-slate-500 ml-4 mt-2 block">WhatsApp Number</label>
+                <input type="tel" placeholder="+91 98765 43210" class="w-full bg-transparent p-4 pt-1 text-sm outline-none">
+            </div>
+        </div>
+
+        <button onclick="nextStep(2)" class="w-full btn-sage py-5 rounded-2xl font-bold shadow-lg active:scale-95 transition">Continue</button>
+    </section>
+
+    <section id="onboard-2" class="hidden space-y-8 animate-fade-in">
+        <header>
+            <h1 class="serif text-3xl mb-2">Name your Vault</h1>
+            <p class="text-sm text-slate-400 leading-relaxed">This is the shared workspace your family members will join.</p>
+        </header>
+
+        <div class="glass-input p-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 ml-4 mt-2 block">Vault Name</label>
+            <input type="text" placeholder="e.g. The Sharma Family Vault" class="w-full bg-transparent p-4 pt-1 text-sm outline-none">
+        </div>
+
+        <div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
+            <p class="text-[11px] text-blue-400 leading-tight italic">Note: You can invite your spouse or children to this vault in the next step.</p>
+        </div>
+
+        <button onclick="nextStep(3)" class="w-full btn-sage py-5 rounded-2xl font-bold shadow-lg">Create Vault</button>
+    </section>
+
+    <section id="onboard-3" class="hidden space-y-8 animate-fade-in">
+        <header class="text-center">
+            <h1 class="serif text-3xl mb-2">What's first?</h1>
+            <p class="text-sm text-slate-400">Let's secure one record to see how it works.</p>
+        </header>
+
+        <div class="space-y-3">
+            <button class="w-full glass-input p-5 text-left flex items-center gap-4 hover:bg-white/5 transition">
+                <span class="text-2xl">🤝</span>
+                <div>
+                    <p class="font-semibold text-sm">Record a Loan</p>
+                    <p class="text-[10px] text-slate-500">OTP-verified lending</p>
+                </div>
+            </button>
+            <button class="w-full glass-input p-5 text-left flex items-center gap-4 hover:bg-white/5 transition">
+                <span class="text-2xl">🛡️</span>
+                <div>
+                    <p class="font-semibold text-sm">Add Insurance</p>
+                    <p class="text-[10px] text-slate-500">Health, Life, or Vehicle</p>
+                </div>
+            </button>
+            <button class="w-full glass-input p-5 text-left flex items-center gap-4 hover:bg-white/5 transition">
+                <span class="text-2xl">📅</span>
+                <div>
+                    <p class="font-semibold text-sm">Set a Renewal</p>
+                    <p class="text-[10px] text-slate-500">GHMC, Tax, or Licenses</p>
+                </div>
+            </button>
+        </div>
+    </section>
+
+    <script>
+        function nextStep(step) {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('onboard-' + step).classList.remove('hidden');
+        }
+    </script>
+
+</body>
+</html>
