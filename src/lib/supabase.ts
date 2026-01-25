@@ -1,10 +1,13 @@
 import 'react-native-url-polyfill/auto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 
 // Environment variables - replace with your Supabase project credentials
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 0;
 
 // Custom storage adapter using expo-secure-store for secure token storage
 const ExpoSecureStoreAdapter = {
@@ -31,38 +34,49 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Create Supabase client with secure storage
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// Create Supabase client only if configured
+export const supabase: SupabaseClient | null = isSupabaseConfigured
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: ExpoSecureStoreAdapter,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+
+// Helper to check if Supabase is ready
+export const isSupabaseReady = () => isSupabaseConfigured && supabase !== null;
 
 // ============================================
 // Auth Helper Functions
 // ============================================
 
 export const signInWithGoogle = async () => {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return null;
+  }
   // This will be implemented with expo-auth-session
-  // For now, return a placeholder
   throw new Error('Google Sign-in not yet implemented');
 };
 
 export const signOut = async () => {
+  if (!supabase) return;
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 };
 
 export const getCurrentUser = async () => {
+  if (!supabase) return null;
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error) throw error;
   return user;
 };
 
 export const getCurrentSession = async () => {
+  if (!supabase) return null;
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) throw error;
   return session;
@@ -73,6 +87,8 @@ export const getCurrentSession = async () => {
 // ============================================
 
 export const createWorkspace = async (name: string, userId: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { data, error } = await supabase
     .from('workspaces')
     .insert({ name, created_by: userId })
@@ -95,6 +111,8 @@ export const getWorkspaceForUser = async (userId: string): Promise<{
   created_by: string;
   created_at: string;
 } | null> => {
+  if (!supabase) return null;
+
   const { data, error } = await supabase
     .from('workspace_members')
     .select('workspace_id, role, workspaces(id, name, created_by, created_at)')
@@ -115,6 +133,8 @@ export const getWorkspaceForUser = async (userId: string): Promise<{
 };
 
 export const getWorkspaceMembers = async (workspaceId: string) => {
+  if (!supabase) return [];
+
   const { data, error } = await supabase
     .from('workspace_members')
     .select('*, user:auth.users(id, email, raw_user_meta_data)')
@@ -129,6 +149,8 @@ export const getWorkspaceMembers = async (workspaceId: string) => {
 // ============================================
 
 export const getLoans = async (workspaceId: string) => {
+  if (!supabase) return [];
+
   const { data, error } = await supabase
     .from('loans')
     .select('*')
@@ -148,6 +170,8 @@ export const createLoan = async (loan: {
   return_date?: string;
   notes?: string;
 }) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { data, error } = await supabase
     .from('loans')
     .insert(loan)
@@ -165,6 +189,8 @@ export const updateLoan = async (id: string, updates: Partial<{
   return_date: string;
   notes: string;
 }>) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { data, error } = await supabase
     .from('loans')
     .update(updates)
@@ -181,6 +207,8 @@ export const updateLoan = async (id: string, updates: Partial<{
 // ============================================
 
 export const getVaultItems = async (workspaceId: string, category?: 'insurance' | 'renewal') => {
+  if (!supabase) return [];
+
   let query = supabase
     .from('vault_items')
     .select('*')
@@ -207,6 +235,8 @@ export const createVaultItem = async (item: {
   reminder_days?: number;
   document_url?: string;
 }) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { data, error } = await supabase
     .from('vault_items')
     .insert(item)
@@ -225,6 +255,8 @@ export const updateVaultItem = async (id: string, updates: Partial<{
   reminder_days: number;
   document_url: string;
 }>) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { data, error } = await supabase
     .from('vault_items')
     .update(updates)
@@ -237,6 +269,8 @@ export const updateVaultItem = async (id: string, updates: Partial<{
 };
 
 export const deleteVaultItem = async (id: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
   const { error } = await supabase
     .from('vault_items')
     .delete()

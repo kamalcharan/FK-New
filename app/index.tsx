@@ -4,15 +4,21 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAppSelector, useAppDispatch } from '../src/hooks/useStore';
 import { setLoading, setUser, setSession } from '../src/store/slices/authSlice';
 import { setWorkspace } from '../src/store/slices/workspaceSlice';
-import { supabase, getWorkspaceForUser } from '../src/lib/supabase';
+import { supabase, getWorkspaceForUser, isSupabaseReady } from '../src/lib/supabase';
 import { Colors } from '../src/constants/theme';
 
 export default function Index() {
   const dispatch = useAppDispatch();
-  const { isLoading, isAuthenticated, hasCompletedOnboarding } = useAppSelector(state => state.auth);
+  const { isLoading, isAuthenticated } = useAppSelector(state => state.auth);
   const { currentWorkspace } = useAppSelector(state => state.workspace);
 
   useEffect(() => {
+    // If Supabase is not configured, skip auth check
+    if (!isSupabaseReady() || !supabase) {
+      dispatch(setLoading(false));
+      return;
+    }
+
     checkAuthState();
 
     // Listen for auth changes
@@ -55,6 +61,11 @@ export default function Index() {
   }, []);
 
   const checkAuthState = async () => {
+    if (!supabase) {
+      dispatch(setLoading(false));
+      return;
+    }
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
 

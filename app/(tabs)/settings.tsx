@@ -5,13 +5,13 @@ import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constant
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { logout } from '../../src/store/slices/authSlice';
 import { clearWorkspace } from '../../src/store/slices/workspaceSlice';
-import { supabase } from '../../src/lib/supabase';
+import { signOut } from '../../src/lib/supabase';
 
 export default function SettingsScreen() {
   const dispatch = useAppDispatch();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     dispatch(logout());
     dispatch(clearWorkspace());
     router.replace('/(auth)/onboarding');
