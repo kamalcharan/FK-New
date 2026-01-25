@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { Provider } from 'react-redux';
 import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_300Light } from '@expo-google-fonts/inter';
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
@@ -27,8 +28,25 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // Show loading while fonts load
   if (!fontsLoaded && !fontError) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={{ color: Colors.text, marginTop: 16 }}>Loading fonts...</Text>
+      </View>
+    );
+  }
+
+  // Show error if fonts failed
+  if (fontError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: Colors.danger, fontSize: 16, textAlign: 'center' }}>
+          Font loading error: {fontError.message}
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -43,6 +61,7 @@ export default function RootLayout() {
               animation: 'fade',
             }}
           >
+            <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
           </Stack>
