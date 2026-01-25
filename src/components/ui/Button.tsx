@@ -24,25 +24,27 @@ export function Button({
   textStyle,
   icon,
 }: ButtonProps) {
+  // FIX: Use ternary with null instead of && which returns false
   const buttonStyles = [
     styles.base,
     styles[variant],
-    disabled && styles.disabled,
+    disabled ? styles.disabled : null,
     style,
   ];
 
   const textStyles = [
     styles.text,
     styles[`${variant}Text` as keyof typeof styles],
-    disabled && styles.disabledText,
+    disabled ? styles.disabledText : null,
     textStyle,
   ];
 
   return (
     <Pressable
+      // FIX: Use ternary with null in style function
       style={({ pressed }) => [
-        buttonStyles,
-        pressed && styles.pressed,
+        ...buttonStyles,
+        pressed ? styles.pressed : null,
       ]}
       onPress={onPress}
       disabled={disabled || loading}

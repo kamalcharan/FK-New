@@ -5,7 +5,11 @@ import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constant
 export default function DashboardScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -55,7 +59,11 @@ export default function DashboardScreen() {
 
         {/* Emergency Access */}
         <Text style={styles.sectionTitle}>FAMILY EMERGENCY ACCESS</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.emergencyScroll}>
+        <ScrollView 
+          horizontal={true} 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.emergencyScroll}
+        >
           <View style={styles.emergencyCard}>
             <Text style={styles.emergencyIcon}>🚑</Text>
             <Text style={styles.emergencyLabel}>Health</Text>
@@ -94,16 +102,23 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   title: {
-    ...Typography.h2,
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 24,
+    lineHeight: 32,
     color: Colors.text,
   },
   status: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
     marginTop: 4,
+    textTransform: 'uppercase',
   },
   notificationButton: {
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     width: 40,
     height: 40,
     borderRadius: BorderRadius.xl,
@@ -111,7 +126,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   alertCard: {
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     borderRadius: BorderRadius['3xl'],
     padding: 24,
     marginBottom: 32,
@@ -132,16 +149,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.warning,
   },
   alertLabel: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.warning,
+    textTransform: 'uppercase',
   },
   alertTitle: {
-    ...Typography.h3,
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 20,
+    lineHeight: 28,
     color: Colors.text,
     marginBottom: 4,
   },
   alertSubtitle: {
-    ...Typography.bodySm,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
     color: Colors.textSecondary,
     marginBottom: 24,
   },
@@ -157,18 +181,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   renewButtonText: {
-    ...Typography.button,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
     color: '#000',
   },
   snoozeButton: {
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
   },
   snoozeButtonText: {
-    ...Typography.button,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.text,
   },
   summaryGrid: {
@@ -178,15 +208,20 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     borderRadius: BorderRadius['2xl'],
     padding: 20,
     height: 160,
     justifyContent: 'space-between',
   },
   summaryLabel: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
+    textTransform: 'uppercase',
   },
   summaryContent: {
     gap: 4,
@@ -197,27 +232,36 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   summaryStatus: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.success,
+    textTransform: 'uppercase',
   },
   summaryStatusMuted: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textSecondary,
     fontStyle: 'italic',
-    textTransform: 'none',
   },
   sectionTitle: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
     marginBottom: 16,
     marginLeft: 4,
+    textTransform: 'uppercase',
   },
   emergencyScroll: {
     marginHorizontal: -24,
     paddingHorizontal: 24,
   },
   emergencyCard: {
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     width: 96,
     height: 96,
     borderRadius: BorderRadius.xl,

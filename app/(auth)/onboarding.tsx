@@ -71,9 +71,11 @@ export default function OnboardingScreen() {
         data={ONBOARDING_SLIDES}
         renderItem={renderSlide}
         keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
+        horizontal={true}
+        pagingEnabled={true}
         showsHorizontalScrollIndicator={false}
+        bounces={false}
+        scrollEventThrottle={16}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({

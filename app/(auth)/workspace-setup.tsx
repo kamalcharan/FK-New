@@ -31,7 +31,7 @@ export default function WorkspaceSetupScreen() {
           <TextInput
             style={[
               styles.input,
-              isFocused && styles.inputFocused,
+              isFocused ? styles.inputFocused : null,
             ]}
             placeholder="e.g. The Sharma Family"
             placeholderTextColor={Colors.textPlaceholder}
@@ -49,7 +49,7 @@ export default function WorkspaceSetupScreen() {
           title="Create Workspace"
           variant="primary"
           onPress={handleCreateWorkspace}
-          disabled={!vaultName.trim()}
+          disabled={vaultName.trim().length === 0}
         />
 
         {/* Divider */}
@@ -84,7 +84,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   subtitle: {
-    ...Typography.body,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
     color: Colors.textSecondary,
     marginBottom: Spacing['2xl'],
   },
@@ -92,10 +94,13 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
   },
   label: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
     marginBottom: Spacing.sm,
     marginLeft: 4,
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: Colors.inputBackground,
@@ -122,7 +127,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBorder,
   },
   dividerText: {
-    ...Typography.bodySm,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 2,

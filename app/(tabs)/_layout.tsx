@@ -1,13 +1,13 @@
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Colors, Typography } from '../../src/constants/theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { Colors } from '../../src/constants/theme';
 
 function TabBarIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
   return (
     <View style={styles.tabItem}>
-      {focused && <View style={styles.activeIndicator} />}
+      {focused ? <View style={styles.activeIndicator} /> : null}
       <Text style={styles.tabIcon}>{icon}</Text>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+      <Text style={[styles.tabLabel, focused ? styles.tabLabelActive : null]}>{label}</Text>
     </View>
   );
 }
@@ -29,6 +29,8 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
+        tabBarActiveTintColor: Colors.text,
+        tabBarInactiveTintColor: Colors.textMuted,
       }}
     >
       <Tabs.Screen

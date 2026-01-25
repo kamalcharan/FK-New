@@ -82,6 +82,8 @@ export const BorderRadius = {
   full: 9999,
 } as const;
 
+// FIX: Removed textTransform from label - apply it directly in StyleSheet
+// textTransform can cause issues on Android when spread
 export const Typography = {
   // Headings (Fraunces)
   h1: {
@@ -117,12 +119,11 @@ export const Typography = {
     lineHeight: 18,
   },
 
-  // Labels
+  // Labels - FIX: removed textTransform, apply in component
   label: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10,
     letterSpacing: 1.5,
-    textTransform: 'uppercase' as const,
   },
 
   // Buttons
