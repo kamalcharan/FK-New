@@ -27,14 +27,14 @@ export function Button({
   const buttonStyles = [
     styles.base,
     styles[variant],
-    disabled && styles.disabled,
+    disabled ? styles.disabled : null,
     style,
   ];
 
   const textStyles = [
     styles.text,
     styles[`${variant}Text` as keyof typeof styles],
-    disabled && styles.disabledText,
+    disabled ? styles.disabledText : null,
     textStyle,
   ];
 
@@ -42,7 +42,7 @@ export function Button({
     <Pressable
       style={({ pressed }) => [
         buttonStyles,
-        pressed && styles.pressed,
+        pressed ? styles.pressed : null,
       ]}
       onPress={onPress}
       disabled={disabled || loading}

@@ -5,9 +5,9 @@ import { Colors, Typography } from '../../src/constants/theme';
 function TabBarIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
   return (
     <View style={styles.tabItem}>
-      {focused && <View style={styles.activeIndicator} />}
+      {focused ? <View style={styles.activeIndicator} /> : null}
       <Text style={styles.tabIcon}>{icon}</Text>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+      <Text style={[styles.tabLabel, focused ? styles.tabLabelActive : null]}>{label}</Text>
     </View>
   );
 }

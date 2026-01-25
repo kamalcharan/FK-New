@@ -117,12 +117,11 @@ export const Typography = {
     lineHeight: 18,
   },
 
-  // Labels
+  // Labels - NOTE: textTransform should be applied directly in component styles
   label: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10,
     letterSpacing: 1.5,
-    textTransform: 'uppercase' as const,
   },
 
   // Buttons

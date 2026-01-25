@@ -31,7 +31,7 @@ export default function WorkspaceSetupScreen() {
           <TextInput
             style={[
               styles.input,
-              isFocused && styles.inputFocused,
+              isFocused ? styles.inputFocused : null,
             ]}
             placeholder="e.g. The Sharma Family"
             placeholderTextColor={Colors.textPlaceholder}
