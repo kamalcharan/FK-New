@@ -1,9 +1,34 @@
 // app/(tabs)/index.tsx
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';
 
+// Dummy health insurance data for dashboard
+const HEALTH_INSURANCE = [
+  {
+    id: '1',
+    provider: 'HDFC Ergo',
+    policyType: 'Family Floater',
+    sumInsured: 1000000,
+    members: ['Self', 'Spouse', '2 Children'],
+    expiryDate: '15 Mar 2026',
+    daysLeft: 48,
+  },
+  {
+    id: '2',
+    provider: 'Star Health',
+    policyType: 'Senior Citizen',
+    sumInsured: 500000,
+    members: ['Father', 'Mother'],
+    expiryDate: '20 Apr 2026',
+    daysLeft: 84,
+  },
+];
+
 export default function DashboardScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -54,8 +79,46 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Health Insurance Section */}
+        <Text style={styles.sectionTitle}>HEALTH INSURANCE</Text>
+        {HEALTH_INSURANCE.map(policy => (
+          <Pressable key={policy.id} style={styles.insuranceCard} onPress={() => router.push('/vault')}>
+            <View style={styles.insuranceHeader}>
+              <View style={styles.insuranceIconContainer}>
+                <Text style={styles.insuranceIcon}>🏥</Text>
+              </View>
+              <View style={styles.insuranceTitleArea}>
+                <Text style={styles.insuranceProvider}>{policy.provider}</Text>
+                <Text style={styles.insuranceType}>{policy.policyType}</Text>
+              </View>
+              {policy.daysLeft <= 60 ? (
+                <View style={styles.expiryBadge}>
+                  <Text style={styles.expiryText}>{policy.daysLeft}d left</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.insuranceDetails}>
+              <View style={styles.insuranceRow}>
+                <Text style={styles.insuranceLabel}>Sum Insured</Text>
+                <Text style={styles.insuranceValue}>₹{(policy.sumInsured / 100000).toFixed(0)}L</Text>
+              </View>
+              <View style={styles.insuranceRow}>
+                <Text style={styles.insuranceLabel}>Members</Text>
+                <Text style={styles.insuranceValue}>{policy.members.length} covered</Text>
+              </View>
+            </View>
+            <View style={styles.memberTags}>
+              {policy.members.map((member, idx) => (
+                <View key={idx} style={styles.memberTag}>
+                  <Text style={styles.memberTagText}>{member}</Text>
+                </View>
+              ))}
+            </View>
+          </Pressable>
+        ))}
+
         {/* Emergency Access */}
-        <Text style={styles.sectionTitle}>FAMILY EMERGENCY ACCESS</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>FAMILY EMERGENCY ACCESS</Text>
         <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={styles.emergencyScroll}>
           <View style={styles.emergencyCard}>
             <Text style={styles.emergencyIcon}>🚑</Text>
@@ -234,5 +297,83 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'Inter_400Regular',
     color: Colors.text,
+  },
+  insuranceCard: {
+    ...GlassStyle,
+    borderRadius: BorderRadius['2xl'],
+    padding: 20,
+    marginBottom: 16,
+  },
+  insuranceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  insuranceIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insuranceIcon: {
+    fontSize: 20,
+  },
+  insuranceTitleArea: {
+    flex: 1,
+  },
+  insuranceProvider: {
+    ...Typography.h3,
+    color: Colors.text,
+  },
+  insuranceType: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  expiryBadge: {
+    backgroundColor: Colors.warningMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  expiryText: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.warning,
+  },
+  insuranceDetails: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  insuranceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  insuranceLabel: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+  },
+  insuranceValue: {
+    ...Typography.body,
+    color: Colors.text,
+  },
+  memberTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  memberTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  memberTagText: {
+    fontSize: 10,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textSecondary,
   },
 });
