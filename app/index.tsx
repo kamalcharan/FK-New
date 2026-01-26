@@ -1,17 +1,18 @@
 // app/index.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Redirect } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAppSelector, useAppDispatch } from '../src/hooks/useStore';
 import { setLoading, setUser, setSession } from '../src/store/slices/authSlice';
 import { setWorkspace } from '../src/store/slices/workspaceSlice';
-import { supabase, getWorkspaceForUser, isSupabaseReady } from '../src/lib/supabase';
+import { supabase, getWorkspaceForUser, isSupabaseReady, getUserProfile } from '../src/lib/supabase';
 import { Colors } from '../src/constants/theme';
 
 export default function Index() {
   const dispatch = useAppDispatch();
   const { isLoading, isAuthenticated } = useAppSelector(state => state.auth);
   const { currentWorkspace } = useAppSelector(state => state.workspace);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
     // If Supabase is not configured, skip auth check
@@ -50,10 +51,15 @@ export default function Index() {
         if (workspace) {
           dispatch(setWorkspace(workspace));
         }
+
+        // Check onboarding status
+        const profile = await getUserProfile(session.user.id);
+        setOnboardingCompleted(profile?.onboarding_completed ?? false);
       } else {
         dispatch(setUser(null));
         dispatch(setSession(null));
         dispatch(setWorkspace(null));
+        setOnboardingCompleted(null);
       }
       dispatch(setLoading(false));
     });
@@ -84,6 +90,12 @@ export default function Index() {
         if (workspace) {
           dispatch(setWorkspace(workspace));
         }
+
+        // Check onboarding status
+        const profile = await getUserProfile(session.user.id);
+        setOnboardingCompleted(profile?.onboarding_completed ?? false);
+      } else {
+        setOnboardingCompleted(null);
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -93,7 +105,7 @@ export default function Index() {
   };
 
   // Show loading spinner while checking auth
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && onboardingCompleted === null)) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -111,7 +123,18 @@ export default function Index() {
     return <Redirect href="/(auth)/workspace-setup" />;
   }
 
-  // Fully authenticated with workspace - go to main app
+  // Authenticated with workspace but onboarding not completed - go to family invite
+  if (!onboardingCompleted) {
+    return <Redirect href={{
+      pathname: "/(auth)/family-invite",
+      params: {
+        workspaceName: currentWorkspace.name,
+        workspaceId: currentWorkspace.id,
+      }
+    }} />;
+  }
+
+  // Fully authenticated with workspace and onboarding complete - go to main app
   return <Redirect href="/(tabs)" />;
 }
 
