@@ -5,7 +5,7 @@
 -- MASTER TABLE: Family Relationships
 -- ============================================
 
-CREATE TABLE m_relationships (
+CREATE TABLE IF NOT EXISTS m_relationships (
   id SERIAL PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
   label TEXT NOT NULL,
@@ -18,6 +18,7 @@ CREATE TABLE m_relationships (
 );
 
 -- Insert relationships (constellation = top 6, rest in +More)
+-- Use ON CONFLICT to avoid duplicates
 INSERT INTO m_relationships (code, label, label_hindi, icon, display_order, is_constellation) VALUES
   -- Constellation relationships (most common)
   ('mom', 'Mom', 'माँ', '👩', 1, true),
@@ -34,31 +35,46 @@ INSERT INTO m_relationships (code, label, label_hindi, icon, display_order, is_c
   ('aunt', 'Aunt', 'चाची/मामी', '👩‍🦳', 13, false),
   ('cousin', 'Cousin', 'भतीजा/भतीजी', '🧑‍🤝‍🧑', 14, false),
   ('in_law', 'In-Law', 'ससुराल', '👨‍👩‍👧', 15, false),
-  ('friend', 'Trusted Friend', 'मित्र', '🤝', 16, false);
+  ('friend', 'Trusted Friend', 'मित्र', '🤝', 16, false)
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
 -- UPDATE fk_invites: Add relationship_type
 -- ============================================
 
--- Add relationship column to fk_invites
-ALTER TABLE fk_invites
-  ADD COLUMN relationship_code TEXT REFERENCES m_relationships(code),
-  ADD COLUMN invitee_name TEXT,
-  ADD COLUMN message_content TEXT;
+-- Add relationship column to fk_invites (if not exists)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fk_invites' AND column_name = 'relationship_code') THEN
+    ALTER TABLE fk_invites ADD COLUMN relationship_code TEXT REFERENCES m_relationships(code);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fk_invites' AND column_name = 'invitee_name') THEN
+    ALTER TABLE fk_invites ADD COLUMN invitee_name TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fk_invites' AND column_name = 'message_content') THEN
+    ALTER TABLE fk_invites ADD COLUMN message_content TEXT;
+  END IF;
+END $$;
 
--- Add index for faster lookups
-CREATE INDEX idx_fk_invites_workspace ON fk_invites(workspace_id);
-CREATE INDEX idx_fk_invites_status ON fk_invites(status);
-CREATE INDEX idx_fk_invites_code ON fk_invites(invite_code);
+-- Add indexes for faster lookups (if not exists)
+CREATE INDEX IF NOT EXISTS idx_fk_invites_workspace ON fk_invites(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_fk_invites_status ON fk_invites(status);
+CREATE INDEX IF NOT EXISTS idx_fk_invites_code ON fk_invites(invite_code);
 
 -- ============================================
 -- UPDATE fk_workspace_members: Add relationship
 -- ============================================
 
 -- When invite is accepted, we store the relationship in workspace_members
-ALTER TABLE fk_workspace_members
-  ADD COLUMN relationship_code TEXT REFERENCES m_relationships(code),
-  ADD COLUMN invited_by UUID REFERENCES fk_users(id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fk_workspace_members' AND column_name = 'relationship_code') THEN
+    ALTER TABLE fk_workspace_members ADD COLUMN relationship_code TEXT REFERENCES m_relationships(code);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fk_workspace_members' AND column_name = 'invited_by') THEN
+    ALTER TABLE fk_workspace_members ADD COLUMN invited_by UUID REFERENCES fk_users(id);
+  END IF;
+END $$;
 
 -- ============================================
 -- FUNCTION: Generate unique invite code
@@ -285,6 +301,7 @@ $$;
 ALTER TABLE m_relationships ENABLE ROW LEVEL SECURITY;
 
 -- Everyone can read relationships
+DROP POLICY IF EXISTS "Anyone can view relationships" ON m_relationships;
 CREATE POLICY "Anyone can view relationships" ON m_relationships
   FOR SELECT USING (true);
 

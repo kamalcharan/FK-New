@@ -15,16 +15,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signInWithPassword, isSupabaseReady } from '../../src/lib/supabase';
+import { signInWithPassword, isSupabaseReady, acceptFamilyInvite, updateOnboardingStatus } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
-import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
+import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
+import { useAppDispatch } from '../../src/hooks/useStore';
+import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 export default function SignInScreen() {
+  const dispatch = useAppDispatch();
   const [identifier, setIdentifier] = useState(''); // email or phone
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [showInviteInput, setShowInviteInput] = useState(false);
 
   // Detect if input is phone or email
   const isPhone = /^\d+$/.test(identifier.replace(/\D/g, '')) && identifier.length <= 12;
@@ -52,6 +57,31 @@ export default function SignInScreen() {
       const { user } = await signInWithPassword(identifier, password);
 
       if (user) {
+        // If user has an invite code, try to accept it
+        if (inviteCode.trim()) {
+          try {
+            const result = await acceptFamilyInvite(inviteCode.trim(), user.id);
+
+            if (result.success && result.workspace_id) {
+              // Update Redux store with joined workspace
+              dispatch(setWorkspace({
+                id: result.workspace_id,
+                name: result.workspace_name || 'Family Vault',
+                owner_id: '',
+                created_at: new Date().toISOString(),
+              }));
+
+              showSuccessToast('Joined!', `You've joined ${result.workspace_name}`);
+              router.replace('/(tabs)');
+              return;
+            } else if (result.error_message && result.error_message !== 'Already a member') {
+              showWarningToast('Invite Issue', result.error_message);
+            }
+          } catch (inviteErr: any) {
+            showWarningToast('Invite Failed', 'Could not process invite code.');
+          }
+        }
+
         // Login successful - show toast and navigate
         showSuccessToast('Welcome Back', 'Signed in successfully');
         router.replace('/');
@@ -98,6 +128,33 @@ export default function SignInScreen() {
               Sign in to access your family vault
             </Text>
           </View>
+
+          {/* Invite Code Section */}
+          <Pressable
+            onPress={() => setShowInviteInput(!showInviteInput)}
+            style={styles.inviteToggle}
+          >
+            <Text style={styles.inviteToggleText}>
+              {showInviteInput ? '✕ Cancel invite code' : '🎟️ Have an invite code?'}
+            </Text>
+          </Pressable>
+
+          {showInviteInput && (
+            <View style={styles.inviteSection}>
+              <Text style={styles.inviteHint}>
+                Enter the code to join a family vault
+              </Text>
+              <TextInput
+                value={inviteCode}
+                onChangeText={(text) => setInviteCode(text.toUpperCase())}
+                placeholder="Enter invite code"
+                placeholderTextColor={Colors.textPlaceholder}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.inviteInput}
+              />
+            </View>
+          )}
 
           {/* Form */}
           <View style={styles.form}>
@@ -341,5 +398,41 @@ const styles = StyleSheet.create({
   signUpLink: {
     ...Typography.body,
     color: Colors.primary,
+  },
+  inviteToggle: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  inviteToggleText: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+  },
+  inviteSection: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: BorderRadius.lg,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  inviteHint: {
+    ...Typography.bodySm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  inviteInput: {
+    backgroundColor: Colors.inputBackground,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...Typography.body,
+    color: Colors.text,
+    textAlign: 'center',
+    letterSpacing: 2,
+    fontSize: 18,
   },
 });
