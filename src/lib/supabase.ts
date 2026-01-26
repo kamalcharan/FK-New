@@ -11,12 +11,13 @@ const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 const isSupabaseConfigured = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 0;
 
 // Create Supabase client only if configured
+// Banking-style auth: no session persistence, always require login
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
+        autoRefreshToken: false,    // Don't auto-refresh since we don't persist
+        persistSession: false,      // Don't persist session - always require login
         detectSessionInUrl: false,
       },
     })
