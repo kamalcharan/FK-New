@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { supabase, isSupabaseReady } from '../../src/lib/supabase';
+import { signInWithPassword, isSupabaseReady } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
 
 export default function SignInScreen() {
@@ -42,48 +42,34 @@ export default function SignInScreen() {
     setIsLoading(true);
 
     try {
-      // Determine auth email
-      let authEmail = identifier;
-      if (isPhone) {
-        const phone = identifier.replace(/\D/g, '');
-        authEmail = `91${phone}@fk.local`;
-      }
-
       if (!isSupabaseReady()) {
-        // Demo mode - skip actual login
-        router.replace('/(tabs)');
+        // Demo mode - skip actual login, go through index for routing
+        router.replace('/');
         return;
       }
 
-      const { data, error: signInError } = await supabase!.auth.signInWithPassword({
-        email: authEmail,
-        password,
-      });
+      const { user } = await signInWithPassword(identifier, password);
 
-      if (signInError) {
-        if (signInError.message.includes('Invalid login')) {
-          setError('Invalid email/phone or password');
-        } else {
-          setError(signInError.message);
-        }
-        return;
+      if (user) {
+        // Login successful - navigate to index which handles workspace check
+        router.replace('/');
       }
-
-      if (data.user) {
-        // Login successful - navigate to app
-        router.replace('/(tabs)');
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Sign in error:', err);
-      setError('Failed to sign in. Please try again.');
+      if (err.message?.includes('Invalid login')) {
+        setError('Invalid email/phone or password');
+      } else {
+        setError(err.message || 'Failed to sign in. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    // TODO: Implement Google OAuth
-    router.replace('/(tabs)');
+    // TODO: Implement Google OAuth with Drive scope
+    // For now, go through index for proper routing
+    router.replace('/');
   };
 
   const handleForgotPassword = () => {

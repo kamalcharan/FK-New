@@ -14,49 +14,52 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { sendOTP, isValidPhoneNumber } from '../../src/lib/otp';
+import { signUpWithEmail, signUpWithPhone, isSupabaseReady } from '../../src/lib/supabase';
+import { isValidPhoneNumber } from '../../src/lib/otp';
 
 type SignUpMethod = 'phone' | 'email';
 
 export default function SignUpScreen() {
-  const [method, setMethod] = useState<SignUpMethod>('phone');
+  const [method, setMethod] = useState<SignUpMethod>('email');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isPhoneValid = isValidPhoneNumber(phone);
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const isFormValid = method === 'phone' ? isPhoneValid : isEmailValid;
+  const isPasswordValid = password.length >= 8;
+  const isFormValid = (method === 'phone' ? isPhoneValid : isEmailValid) && isPasswordValid;
 
-  const handleContinue = async () => {
+  const handleSignUp = async () => {
     setError('');
     setIsLoading(true);
 
     try {
-      if (method === 'phone') {
-        // Send OTP via MSG91
-        const result = await sendOTP(phone, '91');
-
-        if (result.success) {
-          // Navigate to OTP verification
-          router.push({
-            pathname: '/(auth)/verify-phone',
-            params: { phone, countryCode: '91' },
-          });
-        } else {
-          setError(result.message);
-        }
-      } else {
-        // Email flow - send verification email via Supabase
-        // TODO: Implement email verification
-        router.push({
-          pathname: '/(auth)/verify-email',
-          params: { email },
-        });
+      if (!isSupabaseReady()) {
+        // Demo mode - skip actual signup
+        router.replace('/(auth)/workspace-setup');
+        return;
       }
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
+
+      if (method === 'phone') {
+        await signUpWithPhone(phone, password, fullName);
+      } else {
+        await signUpWithEmail(email, password, fullName);
+      }
+
+      // Signup successful - go to workspace setup
+      router.replace('/(auth)/workspace-setup');
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      if (err.message?.includes('already registered')) {
+        setError('An account with this email/phone already exists. Please sign in.');
+      } else {
+        setError(err.message || 'Something went wrong. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -123,54 +126,96 @@ export default function SignUpScreen() {
 
           {/* Input Fields */}
           <View style={styles.inputContainer}>
-            {method === 'phone' ? (
-              <View style={styles.phoneInputRow}>
-                <View style={styles.countryCode}>
-                  <Text style={styles.countryCodeText}>+91</Text>
-                </View>
-                <TextInput
-                  value={phone}
-                  onChangeText={(text) => {
-                    setPhone(text.replace(/\D/g, ''));
-                    setError('');
-                  }}
-                  placeholder="Enter mobile number"
-                  placeholderTextColor={Colors.textPlaceholder}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  style={styles.phoneInput}
-                  autoComplete="tel"
-                />
-              </View>
-            ) : (
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>FULL NAME</Text>
               <TextInput
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text.toLowerCase().trim());
-                  setError('');
-                }}
-                placeholder="Enter email address"
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Enter your full name"
                 placeholderTextColor={Colors.textPlaceholder}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
+                autoCapitalize="words"
+                autoComplete="name"
                 style={styles.emailInput}
               />
-            )}
+            </View>
+
+            {/* Email or Phone */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{method === 'phone' ? 'PHONE NUMBER' : 'EMAIL ADDRESS'}</Text>
+              {method === 'phone' ? (
+                <View style={styles.phoneInputRow}>
+                  <View style={styles.countryCode}>
+                    <Text style={styles.countryCodeText}>+91</Text>
+                  </View>
+                  <TextInput
+                    value={phone}
+                    onChangeText={(text) => {
+                      setPhone(text.replace(/\D/g, ''));
+                      setError('');
+                    }}
+                    placeholder="Enter mobile number"
+                    placeholderTextColor={Colors.textPlaceholder}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    style={styles.phoneInput}
+                    autoComplete="tel"
+                  />
+                </View>
+              ) : (
+                <TextInput
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text.toLowerCase().trim());
+                    setError('');
+                  }}
+                  placeholder="Enter email address"
+                  placeholderTextColor={Colors.textPlaceholder}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  style={styles.emailInput}
+                />
+              )}
+            </View>
+
+            {/* Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>PASSWORD</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setError('');
+                  }}
+                  placeholder="Create a password (min 8 chars)"
+                  placeholderTextColor={Colors.textPlaceholder}
+                  secureTextEntry={!showPassword}
+                  autoComplete="new-password"
+                  style={styles.passwordInput}
+                />
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.showButton}
+                >
+                  <Text style={styles.showButtonText}>
+                    {showPassword ? 'Hide' : 'Show'}
+                  </Text>
+                </Pressable>
+              </View>
+              {password.length > 0 && password.length < 8 ? (
+                <Text style={styles.passwordHint}>Password must be at least 8 characters</Text>
+              ) : null}
+            </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
-
-            <Text style={styles.hint}>
-              {method === 'phone'
-                ? 'We\'ll send a one-time verification code'
-                : 'We\'ll send a verification link to your email'}
-            </Text>
           </View>
 
-          {/* Continue Button */}
+          {/* Sign Up Button */}
           <Button
-            title={isLoading ? 'Sending...' : 'Continue'}
-            onPress={handleContinue}
+            title={isLoading ? 'Creating account...' : 'Create Account'}
+            onPress={handleSignUp}
             disabled={!isFormValid || isLoading}
             loading={isLoading}
             style={styles.continueButton}
@@ -265,10 +310,47 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 24,
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textMuted,
+    letterSpacing: 1.5,
   },
   phoneInputRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.inputBackground,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    ...Typography.body,
+    color: Colors.text,
+  },
+  showButton: {
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  showButtonText: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+  },
+  passwordHint: {
+    ...Typography.bodySm,
+    color: Colors.warning,
+    marginTop: 4,
   },
   countryCode: {
     backgroundColor: Colors.inputBackground,
@@ -306,12 +388,7 @@ const styles = StyleSheet.create({
   error: {
     ...Typography.bodySm,
     color: Colors.danger,
-    marginTop: 8,
-  },
-  hint: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    marginTop: 12,
+    textAlign: 'center',
   },
   continueButton: {
     marginBottom: 24,

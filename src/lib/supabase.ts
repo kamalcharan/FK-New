@@ -29,6 +29,99 @@ export const isSupabaseReady = () => isSupabaseConfigured && supabase !== null;
 // Auth Helper Functions
 // ============================================
 
+// Sign up with email and password
+export const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+
+  if (error) throw error;
+
+  // Create fk_users record after successful signup
+  if (data.user) {
+    const { error: profileError } = await supabase
+      .from('fk_users')
+      .insert({
+        id: data.user.id,
+        email: data.user.email,
+        auth_provider: 'email',
+        is_email_verified: false,
+      });
+
+    if (profileError && !profileError.message.includes('duplicate')) {
+      console.error('Error creating user profile:', profileError);
+    }
+  }
+
+  return data;
+};
+
+// Sign up with phone (creates pseudo-email for Supabase auth)
+export const signUpWithPhone = async (phone: string, password: string, fullName?: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Supabase auth uses email, so we create a pseudo-email from phone
+  const phoneEmail = `91${phone.replace(/\D/g, '')}@fk.local`;
+
+  const { data, error } = await supabase.auth.signUp({
+    email: phoneEmail,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        phone: phone,
+      },
+    },
+  });
+
+  if (error) throw error;
+
+  // Create fk_users record
+  if (data.user) {
+    const { error: profileError } = await supabase
+      .from('fk_users')
+      .insert({
+        id: data.user.id,
+        phone: phone,
+        auth_provider: 'phone',
+        is_phone_verified: false,
+      });
+
+    if (profileError && !profileError.message.includes('duplicate')) {
+      console.error('Error creating user profile:', profileError);
+    }
+  }
+
+  return data;
+};
+
+// Sign in with email/phone and password
+export const signInWithPassword = async (identifier: string, password: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Determine if identifier is email or phone
+  const isEmail = identifier.includes('@');
+  const authEmail = isEmail
+    ? identifier
+    : `91${identifier.replace(/\D/g, '')}@fk.local`;
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: authEmail,
+    password,
+  });
+
+  if (error) throw error;
+  return data;
+};
+
 export const signInWithGoogle = async () => {
   if (!supabase) {
     console.warn('Supabase not configured');
@@ -65,43 +158,47 @@ export const getCurrentSession = async () => {
 export const createWorkspace = async (name: string, userId: string) => {
   if (!supabase) throw new Error('Supabase not configured');
 
+  // Create workspace - trigger will auto-add owner as member
   const { data, error } = await supabase
-    .from('workspaces')
-    .insert({ name, created_by: userId })
+    .from('fk_workspaces')
+    .insert({
+      name,
+      owner_id: userId,
+    })
     .select()
     .single();
 
   if (error) throw error;
-
-  // Add creator as owner
-  await supabase
-    .from('workspace_members')
-    .insert({ workspace_id: data.id, user_id: userId, role: 'owner' });
-
   return data;
 };
 
 export const getWorkspaceForUser = async (userId: string): Promise<{
   id: string;
   name: string;
-  created_by: string;
+  owner_id: string;
   created_at: string;
 } | null> => {
   if (!supabase) return null;
 
   const { data, error } = await supabase
-    .from('workspace_members')
-    .select('workspace_id, role, workspaces(id, name, created_by, created_at)')
+    .from('fk_workspace_members')
+    .select(`
+      workspace_id,
+      role,
+      workspace:fk_workspaces(id, name, owner_id, created_at)
+    `)
     .eq('user_id', userId)
+    .eq('is_active', true)
+    .limit(1)
     .single();
 
   if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
 
-  // Supabase returns the joined table as an object (not array) when using single()
-  const workspace = data?.workspaces as unknown as {
+  // Supabase returns the joined table as an object when using single()
+  const workspace = data?.workspace as unknown as {
     id: string;
     name: string;
-    created_by: string;
+    owner_id: string;
     created_at: string;
   } | null;
 
@@ -112,12 +209,58 @@ export const getWorkspaceMembers = async (workspaceId: string) => {
   if (!supabase) return [];
 
   const { data, error } = await supabase
-    .from('workspace_members')
-    .select('*, user:auth.users(id, email, raw_user_meta_data)')
-    .eq('workspace_id', workspaceId);
+    .from('fk_workspace_members')
+    .select(`
+      id,
+      role,
+      joined_at,
+      user:fk_users(id, email, phone)
+    `)
+    .eq('workspace_id', workspaceId)
+    .eq('is_active', true);
 
   if (error) throw error;
   return data;
+};
+
+export const joinWorkspaceByCode = async (inviteCode: string, userId: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Find workspace by invite code
+  const { data: workspace, error: findError } = await supabase
+    .from('fk_workspaces')
+    .select('id, name, invite_expires_at')
+    .eq('invite_code', inviteCode)
+    .eq('is_active', true)
+    .single();
+
+  if (findError || !workspace) {
+    throw new Error('Invalid invite code');
+  }
+
+  // Check if invite has expired
+  if (workspace.invite_expires_at && new Date(workspace.invite_expires_at) < new Date()) {
+    throw new Error('Invite code has expired');
+  }
+
+  // Add user as member
+  const { error: joinError } = await supabase
+    .from('fk_workspace_members')
+    .insert({
+      workspace_id: workspace.id,
+      user_id: userId,
+      role: 'member',
+      joined_at: new Date().toISOString(),
+    });
+
+  if (joinError) {
+    if (joinError.message.includes('duplicate')) {
+      throw new Error('You are already a member of this workspace');
+    }
+    throw joinError;
+  }
+
+  return workspace;
 };
 
 // ============================================
@@ -128,7 +271,7 @@ export const getLoans = async (workspaceId: string) => {
   if (!supabase) return [];
 
   const { data, error } = await supabase
-    .from('loans')
+    .from('fk_loans')
     .select('*')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false });
@@ -140,16 +283,19 @@ export const getLoans = async (workspaceId: string) => {
 export const createLoan = async (loan: {
   workspace_id: string;
   created_by: string;
-  amount: number;
-  borrower_name: string;
-  borrower_phone: string;
-  return_date?: string;
+  loan_type: 'given' | 'taken';
+  counterparty_name: string;
+  counterparty_phone?: string;
+  principal_amount: number;
+  loan_date: string;
+  due_date?: string;
+  purpose?: string;
   notes?: string;
 }) => {
   if (!supabase) throw new Error('Supabase not configured');
 
   const { data, error } = await supabase
-    .from('loans')
+    .from('fk_loans')
     .insert(loan)
     .select()
     .single();
@@ -159,16 +305,17 @@ export const createLoan = async (loan: {
 };
 
 export const updateLoan = async (id: string, updates: Partial<{
-  otp_verified: boolean;
+  verification_status: string;
   verified_at: string;
   status: string;
-  return_date: string;
+  due_date: string;
+  amount_repaid: number;
   notes: string;
 }>) => {
   if (!supabase) throw new Error('Supabase not configured');
 
   const { data, error } = await supabase
-    .from('loans')
+    .from('fk_loans')
     .update(updates)
     .eq('id', id)
     .select()
@@ -179,43 +326,43 @@ export const updateLoan = async (id: string, updates: Partial<{
 };
 
 // ============================================
-// Vault Item Functions (Insurance & Renewals)
+// Insurance Policy Functions
 // ============================================
 
-export const getVaultItems = async (workspaceId: string, category?: 'insurance' | 'renewal') => {
+export const getInsurancePolicies = async (workspaceId: string) => {
   if (!supabase) return [];
 
-  let query = supabase
-    .from('vault_items')
+  const { data, error } = await supabase
+    .from('fk_insurance_policies')
     .select('*')
     .eq('workspace_id', workspaceId)
     .order('expiry_date', { ascending: true });
 
-  if (category) {
-    query = query.eq('category', category);
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
   return data;
 };
 
-export const createVaultItem = async (item: {
+export const createInsurancePolicy = async (policy: {
   workspace_id: string;
-  category: 'insurance' | 'renewal';
-  type: string;
-  provider_or_authority?: string;
-  policy_or_license_num?: string;
+  created_by: string;
+  policy_type: string;
+  policy_number?: string;
+  provider_name: string;
+  insured_name: string;
+  insured_relation?: string;
+  premium_amount?: number;
+  sum_insured?: number;
+  start_date?: string;
   expiry_date: string;
-  premium_or_fee?: number;
-  reminder_days?: number;
-  document_url?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  notes?: string;
 }) => {
   if (!supabase) throw new Error('Supabase not configured');
 
   const { data, error } = await supabase
-    .from('vault_items')
-    .insert(item)
+    .from('fk_insurance_policies')
+    .insert(policy)
     .select()
     .single();
 
@@ -223,34 +370,44 @@ export const createVaultItem = async (item: {
   return data;
 };
 
-export const updateVaultItem = async (id: string, updates: Partial<{
-  provider_or_authority: string;
-  policy_or_license_num: string;
+// ============================================
+// Renewal Functions
+// ============================================
+
+export const getRenewals = async (workspaceId: string) => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('fk_renewals')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .order('expiry_date', { ascending: true });
+
+  if (error) throw error;
+  return data;
+};
+
+export const createRenewal = async (renewal: {
+  workspace_id: string;
+  created_by: string;
+  renewal_type: string;
+  title: string;
+  authority_name?: string;
+  reference_number?: string;
+  property_address?: string;
+  fee_amount?: number;
+  issue_date?: string;
   expiry_date: string;
-  premium_or_fee: number;
-  reminder_days: number;
-  document_url: string;
-}>) => {
+  notes?: string;
+}) => {
   if (!supabase) throw new Error('Supabase not configured');
 
   const { data, error } = await supabase
-    .from('vault_items')
-    .update(updates)
-    .eq('id', id)
+    .from('fk_renewals')
+    .insert(renewal)
     .select()
     .single();
 
   if (error) throw error;
   return data;
-};
-
-export const deleteVaultItem = async (id: string) => {
-  if (!supabase) throw new Error('Supabase not configured');
-
-  const { error } = await supabase
-    .from('vault_items')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
 };
