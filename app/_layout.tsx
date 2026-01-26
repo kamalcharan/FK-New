@@ -1,21 +1,26 @@
 // app/_layout.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Provider } from 'react-redux';
 import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_300Light } from '@expo-google-fonts/inter';
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import * as SplashScreen from 'expo-splash-screen';
+import * as NativeSplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { store } from '../src/store';
 import { Colors } from '../src/constants/theme';
+import { SplashScreen } from '../src/components/SplashScreen';
+import { toastConfig } from '../src/components/ToastConfig';
 
-// Prevent splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync();
+// Prevent native splash screen from auto-hiding
+NativeSplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [showCustomSplash, setShowCustomSplash] = useState(true);
+
   const [fontsLoaded, fontError] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -25,7 +30,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      // Hide native splash, show our custom splash with tagline
+      NativeSplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
 
@@ -34,7 +40,6 @@ export default function RootLayout() {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={{ color: Colors.text, marginTop: 16 }}>Loading fonts...</Text>
       </View>
     );
   }
@@ -47,6 +52,13 @@ export default function RootLayout() {
           Font loading error: {fontError.message}
         </Text>
       </View>
+    );
+  }
+
+  // Show custom splash with tagline
+  if (showCustomSplash) {
+    return (
+      <SplashScreen onFinish={() => setShowCustomSplash(false)} />
     );
   }
 
@@ -65,7 +77,11 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="add-loan" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="add-insurance" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="add-renewal" options={{ presentation: 'modal' }} />
           </Stack>
+          <Toast config={toastConfig} />
         </Provider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

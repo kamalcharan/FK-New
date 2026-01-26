@@ -25,8 +25,8 @@ export default function OnboardingScreen() {
   };
 
   const handleEmergencyContinue = () => {
-    // Skip to sign in directly from emergency slide
-    router.push('/(auth)/sign-in');
+    // Go to next slide (not skip to sign-in)
+    handleNext();
   };
 
   const onViewableItemsChanged = useRef(

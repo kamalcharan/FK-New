@@ -45,21 +45,8 @@ export const signUpWithEmail = async (email: string, password: string, fullName?
 
   if (error) throw error;
 
-  // Create fk_users record after successful signup
-  if (data.user) {
-    const { error: profileError } = await supabase
-      .from('fk_users')
-      .insert({
-        id: data.user.id,
-        email: data.user.email,
-        auth_provider: 'email',
-        is_email_verified: false,
-      });
-
-    if (profileError && !profileError.message.includes('duplicate')) {
-      console.error('Error creating user profile:', profileError);
-    }
-  }
+  // Note: fk_users record is created automatically by database trigger
+  // See: supabase/migrations/004_auto_create_fk_users.sql
 
   return data;
 };
@@ -84,21 +71,8 @@ export const signUpWithPhone = async (phone: string, password: string, fullName?
 
   if (error) throw error;
 
-  // Create fk_users record
-  if (data.user) {
-    const { error: profileError } = await supabase
-      .from('fk_users')
-      .insert({
-        id: data.user.id,
-        phone: phone,
-        auth_provider: 'phone',
-        is_phone_verified: false,
-      });
-
-    if (profileError && !profileError.message.includes('duplicate')) {
-      console.error('Error creating user profile:', profileError);
-    }
-  }
+  // Note: fk_users record is created automatically by database trigger
+  // See: supabase/migrations/004_auto_create_fk_users.sql
 
   return data;
 };
