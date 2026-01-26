@@ -3,13 +3,24 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';
-import { useAppDispatch } from '../../src/hooks/useStore';
+import { useAppDispatch, useAppSelector } from '../../src/hooks/useStore';
 import { logout } from '../../src/store/slices/authSlice';
 import { clearWorkspace } from '../../src/store/slices/workspaceSlice';
 import { signOut } from '../../src/lib/supabase';
 
 export default function SettingsScreen() {
   const dispatch = useAppDispatch();
+  const { currentWorkspace } = useAppSelector(state => state.workspace);
+
+  const handleInviteFamily = () => {
+    router.push({
+      pathname: '/(auth)/family-invite',
+      params: {
+        workspaceName: currentWorkspace?.name || 'Family Vault',
+        workspaceId: currentWorkspace?.id || '',
+      },
+    });
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -25,6 +36,15 @@ export default function SettingsScreen() {
         <Text style={styles.subtitle}>MANAGE YOUR LEGACY</Text>
 
         <View style={styles.section}>
+          <Pressable style={styles.settingItem} onPress={handleInviteFamily}>
+            <Text style={styles.settingIcon}>👨‍👩‍👧‍👦</Text>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>Invite Family Members</Text>
+              <Text style={styles.settingDescription}>Add family to {currentWorkspace?.name || 'your vault'}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+
           <View style={styles.settingItem}>
             <Text style={styles.settingIcon}>✨</Text>
             <View style={styles.settingText}>
@@ -129,6 +149,10 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.danger,
     fontFamily: 'Inter_600SemiBold',
+  },
+  chevron: {
+    fontSize: 24,
+    color: Colors.textMuted,
   },
   footer: {
     ...Typography.bodySm,

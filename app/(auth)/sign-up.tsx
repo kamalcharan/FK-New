@@ -1,5 +1,5 @@
 // app/(auth)/sign-up.tsx
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase, acceptFamilyInvite, updateOnboardingStatus } from '../../src/lib/supabase';
@@ -23,6 +24,23 @@ import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 type SignUpMethod = 'phone' | 'email';
 
 export default function SignUpScreen() {
+  // Get invite context from verify-invite screen
+  const {
+    inviteCode: inviteCodeParam,
+    workspaceName,
+    inviterName,
+    relationshipLabel,
+    relationshipIcon,
+  } = useLocalSearchParams<{
+    inviteCode?: string;
+    workspaceName?: string;
+    inviterName?: string;
+    relationshipLabel?: string;
+    relationshipIcon?: string;
+  }>();
+
+  const hasInviteContext = Boolean(inviteCodeParam && workspaceName);
+
   const dispatch = useAppDispatch();
   const [method, setMethod] = useState<SignUpMethod>('email');
   const [phone, setPhone] = useState('');
@@ -32,8 +50,6 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [showInviteInput, setShowInviteInput] = useState(false);
 
   const isPhoneValid = isValidPhoneNumber(phone);
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -73,10 +89,10 @@ export default function SignUpScreen() {
         return;
       }
 
-      // If user has an invite code, try to accept it
-      if (inviteCode.trim() && signUpResult.user) {
+      // If user has an invite code (from verify-invite screen), accept it
+      if (inviteCodeParam && signUpResult.user) {
         try {
-          const result = await acceptFamilyInvite(inviteCode.trim(), signUpResult.user.id);
+          const result = await acceptFamilyInvite(inviteCodeParam, signUpResult.user.id);
 
           if (result.success && result.workspace_id) {
             // Update Redux store with joined workspace
@@ -136,37 +152,50 @@ export default function SignUpScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Create your vault</Text>
+            <Text style={styles.title}>
+              {hasInviteContext ? 'Join your family' : 'Create your vault'}
+            </Text>
             <Text style={styles.subtitle}>
-              Your family's financial memory,{'\n'}secured forever.
+              {hasInviteContext
+                ? 'Create an account to join the family vault'
+                : "Your family's financial memory,\nsecured forever."}
             </Text>
           </View>
 
-          {/* Invite Code Section */}
-          <Pressable
-            onPress={() => setShowInviteInput(!showInviteInput)}
-            style={styles.inviteToggle}
-          >
-            <Text style={styles.inviteToggleText}>
-              {showInviteInput ? '✕ Cancel invite code' : '🎟️ Have an invite code?'}
-            </Text>
-          </Pressable>
-
-          {showInviteInput && (
-            <View style={styles.inviteSection}>
-              <Text style={styles.inviteHint}>
-                Enter the code shared by your family member
-              </Text>
-              <TextInput
-                value={inviteCode}
-                onChangeText={(text) => setInviteCode(text.toUpperCase())}
-                placeholder="Enter invite code"
-                placeholderTextColor={Colors.textPlaceholder}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                style={styles.inviteInput}
-              />
+          {/* Invite Context Card - shown when coming from verify-invite */}
+          {hasInviteContext && (
+            <View style={styles.inviteContextCard}>
+              <View style={styles.inviteContextHeader}>
+                <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                <Text style={styles.inviteContextTitle}>Joining via invite</Text>
+              </View>
+              <View style={styles.inviteContextBody}>
+                <Text style={styles.inviteContextIcon}>{relationshipIcon || '👤'}</Text>
+                <Text style={styles.inviteContextText}>
+                  <Text style={styles.inviteContextBold}>{inviterName}</Text>
+                  {' '}invited you to join{' '}
+                  <Text style={styles.inviteContextBold}>{workspaceName}</Text>
+                  {' '}as their{' '}
+                  <Text style={styles.inviteContextRelation}>{relationshipLabel}</Text>
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.replace('/(auth)/verify-invite')}
+                style={styles.changeInviteButton}
+              >
+                <Text style={styles.changeInviteText}>Use different code</Text>
+              </Pressable>
             </View>
+          )}
+
+          {/* Link to verify invite - shown when NOT coming from verify-invite */}
+          {!hasInviteContext && (
+            <Pressable
+              onPress={() => router.push('/(auth)/verify-invite')}
+              style={styles.inviteToggle}
+            >
+              <Text style={styles.inviteToggleText}>🎟️ Have an invite code?</Text>
+            </Pressable>
           )}
 
           {/* Method Toggle */}
@@ -295,7 +324,7 @@ export default function SignUpScreen() {
 
           {/* Sign Up Button */}
           <Button
-            title={isLoading ? 'Creating account...' : 'Create Account'}
+            title={isLoading ? 'Creating account...' : hasInviteContext ? 'Create Account & Join' : 'Create Account'}
             onPress={handleSignUp}
             disabled={!isFormValid || isLoading}
             loading={isLoading}
@@ -534,37 +563,61 @@ const styles = StyleSheet.create({
   inviteToggle: {
     alignItems: 'center',
     paddingVertical: 12,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   inviteToggleText: {
     ...Typography.bodySm,
     color: Colors.primary,
   },
-  inviteSection: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    borderRadius: BorderRadius.lg,
-    padding: 16,
-    marginBottom: 16,
+  inviteContextCard: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'rgba(34, 197, 94, 0.2)',
+    padding: 16,
+    marginBottom: 24,
   },
-  inviteHint: {
+  inviteContextHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  inviteContextTitle: {
+    ...Typography.bodySm,
+    color: '#22c55e',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  inviteContextBody: {
+    alignItems: 'center',
+  },
+  inviteContextIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  inviteContextText: {
     ...Typography.bodySm,
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 12,
+    lineHeight: 20,
   },
-  inviteInput: {
-    backgroundColor: Colors.inputBackground,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.inputBorder,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    ...Typography.body,
+  inviteContextBold: {
     color: Colors.text,
-    textAlign: 'center',
-    letterSpacing: 2,
-    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  inviteContextRelation: {
+    color: '#a855f7',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  changeInviteButton: {
+    alignItems: 'center',
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(34, 197, 94, 0.2)',
+  },
+  changeInviteText: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
   },
 });

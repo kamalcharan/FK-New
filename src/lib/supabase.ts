@@ -493,3 +493,38 @@ export const getRelationships = async (constellationOnly: boolean = false) => {
   if (error) throw error;
   return data || [];
 };
+
+export interface VerifyInviteResult {
+  is_valid: boolean;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  inviter_id: string | null;
+  inviter_name: string | null;
+  relationship_code: string | null;
+  relationship_label: string | null;
+  relationship_icon: string | null;
+  error_message: string | null;
+}
+
+export const verifyInviteCode = async (inviteCode: string): Promise<VerifyInviteResult> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('verify_invite_code', {
+    p_invite_code: inviteCode,
+  });
+
+  if (error) throw error;
+
+  // RPC returns array, get first item
+  return data?.[0] || {
+    is_valid: false,
+    workspace_id: null,
+    workspace_name: null,
+    inviter_id: null,
+    inviter_name: null,
+    relationship_code: null,
+    relationship_label: null,
+    relationship_icon: null,
+    error_message: 'Unknown error',
+  };
+};
