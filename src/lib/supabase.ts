@@ -386,3 +386,110 @@ export const createRenewal = async (renewal: {
   if (error) throw error;
   return data;
 };
+
+// ============================================
+// Family Invite Functions
+// ============================================
+
+export const createFamilyInvite = async (
+  workspaceId: string,
+  invitedBy: string,
+  relationshipCode: string,
+  inviteeName?: string,
+  phone?: string,
+  email?: string
+): Promise<{ invite_id: string; invite_code: string; invite_message: string } | null> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('create_family_invite', {
+    p_workspace_id: workspaceId,
+    p_invited_by: invitedBy,
+    p_relationship_code: relationshipCode,
+    p_invitee_name: inviteeName || null,
+    p_phone: phone || null,
+    p_email: email || null,
+  });
+
+  if (error) throw error;
+
+  // RPC returns array, get first item
+  return data?.[0] || null;
+};
+
+export const getWorkspaceInvites = async (workspaceId: string) => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('get_workspace_invites', {
+    p_workspace_id: workspaceId,
+  });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const acceptFamilyInvite = async (
+  inviteCode: string,
+  userId: string
+): Promise<{ success: boolean; workspace_id: string | null; workspace_name: string | null; error_message: string | null }> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('accept_family_invite', {
+    p_invite_code: inviteCode,
+    p_user_id: userId,
+  });
+
+  if (error) throw error;
+
+  // RPC returns array, get first item
+  return data?.[0] || { success: false, workspace_id: null, workspace_name: null, error_message: 'Unknown error' };
+};
+
+// ============================================
+// User Profile Functions
+// ============================================
+
+export const updateOnboardingStatus = async (userId: string, completed: boolean) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { error } = await supabase
+    .from('fk_user_profiles')
+    .update({
+      onboarding_completed: completed,
+      onboarding_step: completed ? 99 : 0,
+    })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+};
+
+export const getUserProfile = async (userId: string) => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+export const getRelationships = async (constellationOnly: boolean = false) => {
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('m_relationships')
+    .select('*')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true });
+
+  if (constellationOnly) {
+    query = query.eq('is_constellation', true);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return data || [];
+};
