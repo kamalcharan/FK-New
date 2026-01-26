@@ -17,6 +17,7 @@ import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/t
 import { Button } from '../../src/components/ui/Button';
 import { signInWithPassword, isSupabaseReady } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
+import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 
 export default function SignInScreen() {
   const [identifier, setIdentifier] = useState(''); // email or phone
@@ -51,15 +52,15 @@ export default function SignInScreen() {
       const { user } = await signInWithPassword(identifier, password);
 
       if (user) {
-        // Login successful - navigate to index which handles workspace check
+        // Login successful - show toast and navigate
+        showSuccessToast('Welcome Back', 'Signed in successfully');
         router.replace('/');
       }
     } catch (err: any) {
-      console.error('Sign in error:', err);
       if (err.message?.includes('Invalid login')) {
-        setError('Invalid email/phone or password');
+        showErrorToast('Login Failed', 'Invalid email/phone or password');
       } else {
-        setError(err.message || 'Failed to sign in. Please try again.');
+        showErrorToast('Login Failed', err.message || 'Failed to sign in. Please try again.');
       }
     } finally {
       setIsLoading(false);

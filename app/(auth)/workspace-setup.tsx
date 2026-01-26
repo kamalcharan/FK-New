@@ -7,6 +7,7 @@ import { Button } from '../../src/components/ui';
 import { createWorkspace, joinWorkspaceByCode, getCurrentUser, isSupabaseReady } from '../../src/lib/supabase';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
+import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 
 export default function WorkspaceSetupScreen() {
   const dispatch = useAppDispatch();
@@ -54,11 +55,11 @@ export default function WorkspaceSetupScreen() {
         created_at: workspace.created_at,
       }));
 
-      // Navigate to main app
+      // Show success and navigate
+      showSuccessToast('Vault Created', `Welcome to ${workspace.name}!`);
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.error('Create workspace error:', err);
-      setError(err.message || 'Failed to create workspace');
+      showErrorToast('Failed to Create Vault', err.message || 'Please try again');
     } finally {
       setIsLoading(false);
     }
@@ -100,11 +101,11 @@ export default function WorkspaceSetupScreen() {
         created_at: '',
       }));
 
-      // Navigate to main app
+      // Show success and navigate
+      showSuccessToast('Joined Vault', `Welcome to ${workspace.name}!`);
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.error('Join workspace error:', err);
-      setError(err.message || 'Failed to join workspace');
+      showErrorToast('Failed to Join Vault', err.message || 'Please check the invite code');
     } finally {
       setIsLoading(false);
     }
