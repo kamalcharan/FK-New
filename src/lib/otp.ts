@@ -3,11 +3,11 @@
  * OTP Service via N8N Webhooks
  *
  * N8N handles:
- * - OTP generation
- * - SMS sending (via MSG91/Twilio/etc.)
+ * - OTP generation & hashing
+ * - SMS sending via MSG91
  * - OTP storage & verification
- *
- * This keeps SMS provider logic server-side and flexible.
+ * - Rate limiting
+ * - Session token creation
  */
 
 // N8N webhook base URL from environment
@@ -16,13 +16,16 @@ const N8N_WEBHOOK_URL = process.env.EXPO_PUBLIC_N8N_WEBHOOK_URL || '';
 interface SendOTPResponse {
   success: boolean;
   message: string;
-  request_id?: string;
+  phone?: string;
+  expiresIn?: number;
 }
 
 interface VerifyOTPResponse {
   success: boolean;
   message: string;
-  verified?: boolean;
+  token?: string;
+  expiresAt?: string;
+  code?: string;
 }
 
 interface ResendOTPResponse {
@@ -31,24 +34,11 @@ interface ResendOTPResponse {
 }
 
 /**
- * Format phone number to include country code
- * Assumes Indian numbers if no country code provided
+ * Format phone number - remove non-digits
+ * N8N will handle country code
  */
-export function formatPhoneNumber(phone: string, countryCode: string = '91'): string {
-  // Remove all non-digits
-  let cleaned = phone.replace(/\D/g, '');
-
-  // If starts with 0, remove it
-  if (cleaned.startsWith('0')) {
-    cleaned = cleaned.substring(1);
-  }
-
-  // If doesn't start with country code, add it
-  if (!cleaned.startsWith(countryCode)) {
-    cleaned = countryCode + cleaned;
-  }
-
-  return cleaned;
+export function formatPhoneNumber(phone: string): string {
+  return phone.replace(/\D/g, '');
 }
 
 /**
@@ -61,7 +51,7 @@ export function isValidPhoneNumber(phone: string): boolean {
 }
 
 /**
- * Check if N8N is configured
+ * Check if N8N OTP service is configured
  */
 export function isOTPServiceReady(): boolean {
   return N8N_WEBHOOK_URL.length > 0;
@@ -70,14 +60,11 @@ export function isOTPServiceReady(): boolean {
 /**
  * Send OTP to phone number via N8N
  *
- * @param phone - Phone number (with or without country code)
- * @param countryCode - Country code (default: 91 for India)
- * @returns Promise<SendOTPResponse>
+ * N8N Endpoint: POST /webhook/familyknows/otp/send
+ * Request: { phone: "9876543210" }
+ * Response: { success: true, message: "...", phone: "919876543210", expiresIn: 300 }
  */
-export async function sendOTP(
-  phone: string,
-  countryCode: string = '91'
-): Promise<SendOTPResponse> {
+export async function sendOTP(phone: string): Promise<SendOTPResponse> {
   try {
     if (!isOTPServiceReady()) {
       // Demo mode - simulate success
@@ -85,42 +72,34 @@ export async function sendOTP(
       return {
         success: true,
         message: 'OTP sent (demo mode)',
-        request_id: 'demo_' + Date.now(),
+        phone: '91' + formatPhoneNumber(phone),
+        expiresIn: 300,
       };
     }
 
-    const formattedPhone = formatPhoneNumber(phone, countryCode);
-
-    const response = await fetch(`${N8N_WEBHOOK_URL}/otp/send`, {
+    const response = await fetch(`${N8N_WEBHOOK_URL}/familyknows/otp/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        phone: formattedPhone,
-        country_code: countryCode,
+        phone: formatPhoneNumber(phone),
       }),
     });
 
     const data = await response.json();
 
-    if (data.success) {
-      return {
-        success: true,
-        message: 'OTP sent successfully',
-        request_id: data.request_id,
-      };
-    } else {
-      return {
-        success: false,
-        message: data.message || 'Failed to send OTP',
-      };
-    }
+    return {
+      success: data.success || false,
+      message: data.message || 'Failed to send OTP',
+      phone: data.phone,
+      expiresIn: data.expiresIn,
+    };
   } catch (error) {
     console.error('OTP sendOTP error:', error);
     return {
       success: false,
-      message: 'Network error. Please try again.',
+      message: 'Network error. Please check your connection and try again.',
     };
   }
 }
@@ -128,126 +107,123 @@ export async function sendOTP(
 /**
  * Verify OTP entered by user via N8N
  *
- * @param phone - Phone number used to send OTP
- * @param otp - 6-digit OTP entered by user
- * @param countryCode - Country code (default: 91)
- * @returns Promise<VerifyOTPResponse>
+ * N8N Endpoint: POST /webhook/familyknows/otp/verify
+ * Request: { phone: "9876543210", otp: "123456" }
+ * Response: { success: true, token: "...", expiresAt: "..." }
  */
-export async function verifyOTP(
-  phone: string,
-  otp: string,
-  countryCode: string = '91'
-): Promise<VerifyOTPResponse> {
+export async function verifyOTP(phone: string, otp: string): Promise<VerifyOTPResponse> {
   try {
     if (!isOTPServiceReady()) {
       // Demo mode - accept any 6-digit OTP
       console.log('[OTP Demo] Verifying OTP:', otp, 'for phone:', phone);
-      if (otp.length === 6) {
+      if (otp.length === 6 && /^\d+$/.test(otp)) {
         return {
           success: true,
           message: 'OTP verified (demo mode)',
-          verified: true,
+          token: 'demo_token_' + Date.now(),
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         };
       }
       return {
         success: false,
         message: 'Invalid OTP',
-        verified: false,
+        code: 'INVALID',
       };
     }
 
-    const formattedPhone = formatPhoneNumber(phone, countryCode);
-
-    const response = await fetch(`${N8N_WEBHOOK_URL}/otp/verify`, {
+    const response = await fetch(`${N8N_WEBHOOK_URL}/familyknows/otp/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        phone: formattedPhone,
+        phone: formatPhoneNumber(phone),
         otp: otp,
       }),
     });
 
     const data = await response.json();
 
-    if (data.success && data.verified) {
-      return {
-        success: true,
-        message: 'OTP verified successfully',
-        verified: true,
-      };
-    } else {
-      return {
-        success: false,
-        message: data.message || 'Invalid OTP',
-        verified: false,
-      };
-    }
+    return {
+      success: data.success || false,
+      message: data.message || 'Verification failed',
+      token: data.token,
+      expiresAt: data.expiresAt,
+      code: data.code,
+    };
   } catch (error) {
     console.error('OTP verifyOTP error:', error);
     return {
       success: false,
-      message: 'Network error. Please try again.',
-      verified: false,
+      message: 'Network error. Please check your connection and try again.',
     };
   }
 }
 
 /**
- * Resend OTP to phone number via N8N
- *
- * @param phone - Phone number
- * @param method - 'sms' or 'voice'
- * @param countryCode - Country code (default: 91)
- * @returns Promise<ResendOTPResponse>
+ * Resend OTP - calls send OTP again
+ * N8N will handle rate limiting
  */
 export async function resendOTP(
   phone: string,
-  method: 'sms' | 'voice' = 'sms',
-  countryCode: string = '91'
+  method: 'sms' | 'voice' = 'sms'
 ): Promise<ResendOTPResponse> {
+  // For now, resend just calls send again
+  // N8N handles rate limiting internally
+  const result = await sendOTP(phone);
+
+  return {
+    success: result.success,
+    message: result.success
+      ? (method === 'voice' ? 'You will receive a call shortly' : 'OTP resent successfully')
+      : result.message,
+  };
+}
+
+/**
+ * Store session token locally after successful verification
+ */
+export async function storeSessionToken(token: string, expiresAt: string): Promise<void> {
   try {
-    if (!isOTPServiceReady()) {
-      // Demo mode
-      console.log('[OTP Demo] Would resend OTP to:', phone, 'via:', method);
-      return {
-        success: true,
-        message: method === 'voice' ? 'You will receive a call shortly (demo)' : 'OTP resent (demo)',
-      };
-    }
-
-    const formattedPhone = formatPhoneNumber(phone, countryCode);
-
-    const response = await fetch(`${N8N_WEBHOOK_URL}/otp/resend`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        phone: formattedPhone,
-        method: method,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      return {
-        success: true,
-        message: method === 'voice' ? 'You will receive a call shortly' : 'OTP resent successfully',
-      };
-    } else {
-      return {
-        success: false,
-        message: data.message || 'Failed to resend OTP',
-      };
-    }
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.setItem('fk_session_token', token);
+    await AsyncStorage.setItem('fk_session_expires', expiresAt);
   } catch (error) {
-    console.error('OTP resendOTP error:', error);
-    return {
-      success: false,
-      message: 'Network error. Please try again.',
-    };
+    console.error('Failed to store session token:', error);
+  }
+}
+
+/**
+ * Get stored session token
+ */
+export async function getSessionToken(): Promise<{ token: string | null; expiresAt: string | null }> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('fk_session_token');
+    const expiresAt = await AsyncStorage.getItem('fk_session_expires');
+
+    // Check if expired
+    if (expiresAt && new Date(expiresAt) < new Date()) {
+      await clearSessionToken();
+      return { token: null, expiresAt: null };
+    }
+
+    return { token, expiresAt };
+  } catch (error) {
+    console.error('Failed to get session token:', error);
+    return { token: null, expiresAt: null };
+  }
+}
+
+/**
+ * Clear session token (logout)
+ */
+export async function clearSessionToken(): Promise<void> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.removeItem('fk_session_token');
+    await AsyncStorage.removeItem('fk_session_expires');
+  } catch (error) {
+    console.error('Failed to clear session token:', error);
   }
 }
