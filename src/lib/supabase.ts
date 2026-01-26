@@ -475,6 +475,19 @@ export const getUserProfile = async (userId: string) => {
   return data;
 };
 
+// Check if fk_users record exists (needed for foreign key constraints)
+export const checkFkUserExists = async (userId: string): Promise<boolean> => {
+  if (!supabase) return false;
+
+  const { data, error } = await supabase
+    .from('fk_users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+
+  return !error && !!data;
+};
+
 export const getRelationships = async (constellationOnly: boolean = false) => {
   if (!supabase) return [];
 
