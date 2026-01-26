@@ -15,7 +15,34 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase, acceptFamilyInvite, updateOnboardingStatus } from '../../src/lib/supabase';
+import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists } from '../../src/lib/supabase';
+
+// Helper to wait for user records to be created by DB trigger
+// The trigger creates fk_users and fk_user_profiles after auth.users is created
+const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boolean> => {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      // Check both fk_users (for FK constraints) and fk_user_profiles
+      const [userExists, profile] = await Promise.all([
+        checkFkUserExists(userId),
+        getUserProfile(userId),
+      ]);
+
+      console.log(`[Signup] Attempt ${i + 1}: fk_users=${userExists}, profile=${!!profile}`);
+
+      if (userExists && profile) {
+        console.log('[Signup] User records created successfully');
+        return true;
+      }
+    } catch (err) {
+      console.log(`[Signup] Attempt ${i + 1} error:`, err);
+    }
+    // Wait 500ms before retry
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  console.warn('[Signup] User records not created after max attempts');
+  return false;
+};
 import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
 import { useAppDispatch } from '../../src/hooks/useStore';
@@ -92,7 +119,16 @@ export default function SignUpScreen() {
       // If user has an invite code (from verify-invite screen), accept it
       if (inviteCodeParam && signUpResult.user) {
         try {
+          // Wait for DB trigger to create user records (race condition fix)
+          console.log('[Signup] Waiting for user records to be created...');
+          const recordsReady = await waitForUserRecords(signUpResult.user.id);
+          if (!recordsReady) {
+            console.warn('[Signup] User records not created - invite may fail');
+          }
+
+          console.log('[Signup] Accepting invite:', inviteCodeParam);
           const result = await acceptFamilyInvite(inviteCodeParam, signUpResult.user.id);
+          console.log('[Signup] Accept invite result:', result);
 
           if (result.success && result.workspace_id) {
             // Update Redux store with joined workspace
@@ -104,16 +140,20 @@ export default function SignUpScreen() {
             }));
 
             // Mark onboarding as complete
+            console.log('[Signup] Marking onboarding complete...');
             await updateOnboardingStatus(signUpResult.user.id, true);
+            console.log('[Signup] Onboarding marked complete');
 
             showSuccessToast('Welcome!', `You've joined ${result.workspace_name}`);
             router.replace('/(tabs)');
             return;
           } else if (result.error_message) {
+            console.warn('[Signup] Invite issue:', result.error_message);
             showWarningToast('Invite Issue', result.error_message);
             // Continue to workspace setup
           }
         } catch (inviteErr: any) {
+          console.error('[Signup] Invite error:', inviteErr);
           showWarningToast('Invite Failed', 'Could not process invite code. You can join later.');
         }
       }

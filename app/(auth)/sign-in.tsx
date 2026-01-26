@@ -14,11 +14,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signInWithPassword, isSupabaseReady } from '../../src/lib/supabase';
+import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
+import { useAppDispatch } from '../../src/hooks/useStore';
+import { setUser } from '../../src/store/slices/authSlice';
+import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 export default function SignInScreen() {
+  const dispatch = useAppDispatch();
   const [identifier, setIdentifier] = useState(''); // email or phone
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,12 +52,46 @@ export default function SignInScreen() {
         return;
       }
 
-      const { user } = await signInWithPassword(identifier, password);
+      const { user, session } = await signInWithPassword(identifier, password);
 
       if (user) {
-        // Login successful - show toast and navigate
-        showSuccessToast('Welcome Back', 'Signed in successfully');
-        router.replace('/');
+        // Update Redux with user info
+        dispatch(setUser({
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name,
+          avatar_url: user.user_metadata?.avatar_url,
+          created_at: user.created_at,
+        }));
+
+        // Fetch workspace and profile to determine navigation
+        const [workspace, profile] = await Promise.all([
+          getWorkspaceForUser(user.id),
+          getUserProfile(user.id),
+        ]);
+
+        // Determine where to navigate
+        if (!workspace) {
+          // No workspace - go to workspace setup
+          showSuccessToast('Welcome Back', 'Let\'s set up your vault');
+          router.replace('/(auth)/workspace-setup');
+        } else if (!profile?.onboarding_completed) {
+          // Has workspace but onboarding not complete - go to family invite
+          dispatch(setWorkspace(workspace));
+          showSuccessToast('Welcome Back', 'Continue setting up your vault');
+          router.replace({
+            pathname: '/(auth)/family-invite',
+            params: {
+              workspaceName: workspace.name,
+              workspaceId: workspace.id,
+            },
+          });
+        } else {
+          // Fully set up - go to main app
+          dispatch(setWorkspace(workspace));
+          showSuccessToast('Welcome Back', 'Signed in successfully');
+          router.replace('/(tabs)');
+        }
       }
     } catch (err: any) {
       if (err.message?.includes('Invalid login')) {
