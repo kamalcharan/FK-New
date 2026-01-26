@@ -1,16 +1,18 @@
 // app/(auth)/workspace-setup.tsx
 import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState, useMemo } from 'react';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui';
-import { createWorkspace, joinWorkspaceByCode, getCurrentUser, isSupabaseReady } from '../../src/lib/supabase';
+import { createWorkspace, joinWorkspaceByCode, getCurrentUser, isSupabaseReady, supabase } from '../../src/lib/supabase';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
-import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
+import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
 
 export default function WorkspaceSetupScreen() {
   const dispatch = useAppDispatch();
+  const { userName } = useLocalSearchParams<{ userName?: string }>();
+
   const [vaultName, setVaultName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -18,6 +20,15 @@ export default function WorkspaceSetupScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [error, setError] = useState('');
+
+  // Create personalized placeholder based on user's name
+  const placeholderText = useMemo(() => {
+    if (userName) {
+      const firstName = userName.split(' ')[0];
+      return `e.g. The ${firstName}'s Family`;
+    }
+    return 'e.g. The Sharma Family';
+  }, [userName]);
 
   const handleCreateWorkspace = async () => {
     if (!vaultName.trim()) return;
@@ -38,9 +49,18 @@ export default function WorkspaceSetupScreen() {
         return;
       }
 
-      const user = await getCurrentUser();
+      // Try to get current user, with retry for session establishment
+      let user = await getCurrentUser();
+
+      // If no user, wait a moment and retry (session might still be establishing)
+      if (!user && supabase) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: { session } } = await supabase.auth.getSession();
+        user = session?.user || null;
+      }
+
       if (!user) {
-        setError('Please sign in again');
+        showWarningToast('Session Expired', 'Please sign in again');
         router.replace('/(auth)/sign-in');
         return;
       }
@@ -84,9 +104,17 @@ export default function WorkspaceSetupScreen() {
         return;
       }
 
-      const user = await getCurrentUser();
+      // Try to get current user, with retry for session establishment
+      let user = await getCurrentUser();
+
+      if (!user && supabase) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: { session } } = await supabase.auth.getSession();
+        user = session?.user || null;
+      }
+
       if (!user) {
-        setError('Please sign in again');
+        showWarningToast('Session Expired', 'Please sign in again');
         router.replace('/(auth)/sign-in');
         return;
       }
@@ -178,7 +206,7 @@ export default function WorkspaceSetupScreen() {
                   styles.input,
                   isFocused ? styles.inputFocused : null,
                 ]}
-                placeholder="e.g. The Sharma Family"
+                placeholder={placeholderText}
                 placeholderTextColor={Colors.textPlaceholder}
                 value={vaultName}
                 onChangeText={(text) => {

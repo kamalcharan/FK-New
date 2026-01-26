@@ -49,10 +49,27 @@ BEGIN
     updated_at = NOW();
 
   -- Create fk_user_profiles record (if table exists)
+  -- Extract full_name from user metadata
   BEGIN
-    INSERT INTO public.fk_user_profiles (user_id, language)
-    VALUES (NEW.id, 'en')
-    ON CONFLICT (user_id) DO NOTHING;
+    INSERT INTO public.fk_user_profiles (
+      user_id,
+      full_name,
+      display_name,
+      language
+    )
+    VALUES (
+      NEW.id,
+      NEW.raw_user_meta_data->>'full_name',
+      COALESCE(
+        NEW.raw_user_meta_data->>'full_name',
+        SPLIT_PART(NEW.email, '@', 1)
+      ),
+      'en'
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      full_name = COALESCE(EXCLUDED.full_name, fk_user_profiles.full_name),
+      display_name = COALESCE(EXCLUDED.display_name, fk_user_profiles.display_name),
+      updated_at = NOW();
   EXCEPTION WHEN undefined_table THEN
     -- Table doesn't exist yet, skip profile creation
     NULL;

@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signUpWithEmail, signUpWithPhone, isSupabaseReady } from '../../src/lib/supabase';
+import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 
@@ -41,20 +41,35 @@ export default function SignUpScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        // Demo mode - skip actual signup
-        router.replace('/(auth)/workspace-setup');
+        // Demo mode - skip actual signup, pass name for personalization
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName: fullName },
+        });
         return;
       }
 
+      let signUpResult;
       if (method === 'phone') {
-        await signUpWithPhone(phone, password, fullName);
+        signUpResult = await signUpWithPhone(phone, password, fullName);
       } else {
-        await signUpWithEmail(email, password, fullName);
+        signUpResult = await signUpWithEmail(email, password, fullName);
       }
 
-      // Signup successful - show toast and go to workspace setup
-      showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
-      router.replace('/(auth)/workspace-setup');
+      // Check if we have a session (email confirmation might be required)
+      if (!signUpResult.session) {
+        // No session - email confirmation might be required
+        showSuccessToast('Check Your Email', 'Please verify your email to continue');
+        // Still go to workspace-setup, it will handle the auth check
+      } else {
+        showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
+      }
+
+      // Pass the user's name for personalized placeholder
+      router.replace({
+        pathname: '/(auth)/workspace-setup',
+        params: { userName: fullName },
+      });
     } catch (err: any) {
       if (err.message?.includes('already registered')) {
         showErrorToast('Account Exists', 'An account with this email/phone already exists. Please sign in.');
