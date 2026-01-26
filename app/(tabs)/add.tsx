@@ -1,6 +1,7 @@
 // app/(tabs)/add.tsx
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';
 
 const ADD_OPTIONS = [
@@ -35,9 +36,23 @@ const ADD_OPTIONS = [
 ];
 
 export default function AddScreen() {
+  const router = useRouter();
+
   const handleOptionPress = (optionId: string) => {
-    // TODO: Navigate to specific add form
-    console.log('Selected:', optionId);
+    switch (optionId) {
+      case 'loan-given':
+        router.push('/add-loan?type=given');
+        break;
+      case 'loan-taken':
+        router.push('/add-loan?type=taken');
+        break;
+      case 'insurance':
+        router.push('/add-insurance');
+        break;
+      case 'renewal':
+        router.push('/add-renewal');
+        break;
+    }
   };
 
   return (

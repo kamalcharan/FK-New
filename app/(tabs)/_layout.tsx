@@ -53,12 +53,6 @@ export default function TabsLayout() {
         options={{
           tabBarIcon: () => <AddButton />,
         }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            // TODO: Open add modal
-          },
-        }}
       />
       <Tabs.Screen
         name="loans"
