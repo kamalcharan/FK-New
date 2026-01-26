@@ -12,6 +12,16 @@ export default function SettingsScreen() {
   const dispatch = useAppDispatch();
   const { currentWorkspace } = useAppSelector(state => state.workspace);
 
+  const handleViewMembers = () => {
+    router.push({
+      pathname: '/family-members',
+      params: {
+        workspaceName: currentWorkspace?.name || 'Family Vault',
+        workspaceId: currentWorkspace?.id || '',
+      },
+    });
+  };
+
   const handleInviteFamily = () => {
     router.push({
       pathname: '/(auth)/family-invite',
@@ -36,10 +46,19 @@ export default function SettingsScreen() {
         <Text style={styles.subtitle}>MANAGE YOUR LEGACY</Text>
 
         <View style={styles.section}>
-          <Pressable style={styles.settingItem} onPress={handleInviteFamily}>
-            <Text style={styles.settingIcon}>👨‍👩‍👧‍👦</Text>
+          <Pressable style={styles.settingItem} onPress={handleViewMembers}>
+            <Text style={styles.settingIcon}>👥</Text>
             <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>Invite Family Members</Text>
+              <Text style={styles.settingTitle}>Family Members</Text>
+              <Text style={styles.settingDescription}>View and manage members</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+
+          <Pressable style={styles.settingItem} onPress={handleInviteFamily}>
+            <Text style={styles.settingIcon}>➕</Text>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>Invite Family</Text>
               <Text style={styles.settingDescription}>Add family to {currentWorkspace?.name || 'your vault'}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>

@@ -98,7 +98,11 @@ export default function FamilyInviteScreen() {
 
     try {
       const invites = await getWorkspaceInvites(workspaceId);
-      setPendingInvites(invites || []);
+      // Filter to only show pending/sent invites (not accepted or revoked)
+      const pending = (invites || []).filter(
+        (inv: Invite) => ['pending', 'sent', 'opened'].includes(inv.status)
+      );
+      setPendingInvites(pending);
     } catch (err) {
       console.error('Error loading invites:', err);
     }
