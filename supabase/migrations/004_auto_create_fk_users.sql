@@ -1,6 +1,14 @@
 -- supabase/migrations/004_auto_create_fk_users.sql
--- Auto-create fk_users record when auth.users is created
+-- Auto-create fk_users and fk_user_profiles when auth.users is created
 -- This solves the RLS policy issue during signup
+
+-- ============================================
+-- DISABLE OLD TRIGGER (from schema.sql)
+-- ============================================
+
+-- Drop the old trigger that tries to create fk_user_profiles
+-- This was causing: "relation fk_user_profiles does not exist" error
+DROP TRIGGER IF EXISTS create_profile_on_user_insert ON fk_users;
 
 -- ============================================
 -- FUNCTION: Auto-create fk_users on signup
@@ -9,6 +17,7 @@
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Create fk_users record
   INSERT INTO public.fk_users (
     id,
     email,
@@ -38,6 +47,16 @@ BEGIN
     is_email_verified = COALESCE(NEW.email_confirmed_at IS NOT NULL, fk_users.is_email_verified),
     is_phone_verified = COALESCE(NEW.phone_confirmed_at IS NOT NULL, fk_users.is_phone_verified),
     updated_at = NOW();
+
+  -- Create fk_user_profiles record (if table exists)
+  BEGIN
+    INSERT INTO public.fk_user_profiles (user_id, language)
+    VALUES (NEW.id, 'en')
+    ON CONFLICT (user_id) DO NOTHING;
+  EXCEPTION WHEN undefined_table THEN
+    -- Table doesn't exist yet, skip profile creation
+    NULL;
+  END;
 
   RETURN NEW;
 END;

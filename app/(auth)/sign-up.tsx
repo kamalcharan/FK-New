@@ -16,6 +16,7 @@ import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constant
 import { Button } from '../../src/components/ui/Button';
 import { signUpWithEmail, signUpWithPhone, isSupabaseReady } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
+import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 
 type SignUpMethod = 'phone' | 'email';
 
@@ -51,14 +52,14 @@ export default function SignUpScreen() {
         await signUpWithEmail(email, password, fullName);
       }
 
-      // Signup successful - go to workspace setup
+      // Signup successful - show toast and go to workspace setup
+      showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
       router.replace('/(auth)/workspace-setup');
     } catch (err: any) {
-      console.error('Sign up error:', err);
       if (err.message?.includes('already registered')) {
-        setError('An account with this email/phone already exists. Please sign in.');
+        showErrorToast('Account Exists', 'An account with this email/phone already exists. Please sign in.');
       } else {
-        setError(err.message || 'Something went wrong. Please try again.');
+        showErrorToast('Sign Up Failed', err.message || 'Something went wrong. Please try again.');
       }
     } finally {
       setIsLoading(false);
