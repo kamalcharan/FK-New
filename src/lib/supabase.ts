@@ -541,3 +541,66 @@ export const verifyInviteCode = async (inviteCode: string): Promise<VerifyInvite
     error_message: 'Unknown error',
   };
 };
+
+// ============================================
+// Workspace Members Management
+// ============================================
+
+export interface WorkspaceMember {
+  member_id: string;
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  relationship_code: string | null;
+  relationship_label: string | null;
+  relationship_icon: string | null;
+  invited_by_id: string | null;
+  invited_by_name: string | null;
+  joined_at: string;
+  is_owner: boolean;
+}
+
+export const getWorkspaceMembersWithDetails = async (workspaceId: string): Promise<WorkspaceMember[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('get_workspace_members_with_details', {
+    p_workspace_id: workspaceId,
+  });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const removeWorkspaceMember = async (
+  workspaceId: string,
+  memberUserId: string,
+  requestingUserId: string
+): Promise<{ success: boolean; error_message: string | null }> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('remove_workspace_member', {
+    p_workspace_id: workspaceId,
+    p_member_user_id: memberUserId,
+    p_requesting_user_id: requestingUserId,
+  });
+
+  if (error) throw error;
+  return data?.[0] || { success: false, error_message: 'Unknown error' };
+};
+
+export const revokeInvite = async (
+  inviteId: string,
+  requestingUserId: string
+): Promise<{ success: boolean; error_message: string | null }> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('revoke_invite', {
+    p_invite_id: inviteId,
+    p_requesting_user_id: requestingUserId,
+  });
+
+  if (error) throw error;
+  return data?.[0] || { success: false, error_message: 'Unknown error' };
+};
