@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Typography, BorderRadius } from '../../src/constants/theme';
 import { OTPInput } from '../../src/components/ui/OTPInput';
 import { Button } from '../../src/components/ui/Button';
-import { verifyOTP, resendOTP } from '../../src/lib/msg91';
+import { verifyOTP, resendOTP } from '../../src/lib/otp';
 
 const RESEND_COOLDOWN = 30; // seconds
 
@@ -71,7 +71,7 @@ export default function VerifyPhoneScreen() {
     }
   };
 
-  const handleResend = async (type: 'text' | 'voice' = 'text') => {
+  const handleResend = async (type: 'sms' | 'voice' = 'sms') => {
     if (resendCooldown > 0 || isResending) return;
 
     setIsResending(true);
@@ -142,7 +142,7 @@ export default function VerifyPhoneScreen() {
             ) : (
               <View style={styles.resendOptions}>
                 <Pressable
-                  onPress={() => handleResend('text')}
+                  onPress={() => handleResend('sms')}
                   disabled={isResending}
                   style={styles.resendButton}
                 >
