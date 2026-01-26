@@ -75,9 +75,15 @@ export default function WorkspaceSetupScreen() {
         created_at: workspace.created_at,
       }));
 
-      // Show success and navigate
-      showSuccessToast('Vault Created', `Welcome to ${workspace.name}!`);
-      router.replace('/(tabs)');
+      // Show success and navigate to family invite screen
+      showSuccessToast('Vault Created', `Now invite your family!`);
+      router.replace({
+        pathname: '/(auth)/family-invite',
+        params: {
+          workspaceName: workspace.name,
+          workspaceId: workspace.id,
+        },
+      });
     } catch (err: any) {
       showErrorToast('Failed to Create Vault', err.message || 'Please try again');
     } finally {
@@ -129,7 +135,11 @@ export default function WorkspaceSetupScreen() {
         created_at: '',
       }));
 
-      // Show success and navigate
+      // Mark onboarding as complete for joining users
+      const { updateOnboardingStatus } = await import('../../src/lib/supabase');
+      await updateOnboardingStatus(user.id, true);
+
+      // Show success and navigate directly to main app (no invite needed when joining)
       showSuccessToast('Joined Vault', `Welcome to ${workspace.name}!`);
       router.replace('/(tabs)');
     } catch (err: any) {

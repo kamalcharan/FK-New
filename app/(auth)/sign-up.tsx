@@ -14,13 +14,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase } from '../../src/lib/supabase';
+import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase, acceptFamilyInvite, updateOnboardingStatus } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
-import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
+import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
+import { useAppDispatch } from '../../src/hooks/useStore';
+import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 type SignUpMethod = 'phone' | 'email';
 
 export default function SignUpScreen() {
+  const dispatch = useAppDispatch();
   const [method, setMethod] = useState<SignUpMethod>('email');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -29,6 +32,8 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [showInviteInput, setShowInviteInput] = useState(false);
 
   const isPhoneValid = isValidPhoneNumber(phone);
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -61,10 +66,43 @@ export default function SignUpScreen() {
         // No session - email confirmation might be required
         showSuccessToast('Check Your Email', 'Please verify your email to continue');
         // Still go to workspace-setup, it will handle the auth check
-      } else {
-        showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName: fullName },
+        });
+        return;
       }
 
+      // If user has an invite code, try to accept it
+      if (inviteCode.trim() && signUpResult.user) {
+        try {
+          const result = await acceptFamilyInvite(inviteCode.trim(), signUpResult.user.id);
+
+          if (result.success && result.workspace_id) {
+            // Update Redux store with joined workspace
+            dispatch(setWorkspace({
+              id: result.workspace_id,
+              name: result.workspace_name || 'Family Vault',
+              owner_id: '',
+              created_at: new Date().toISOString(),
+            }));
+
+            // Mark onboarding as complete
+            await updateOnboardingStatus(signUpResult.user.id, true);
+
+            showSuccessToast('Welcome!', `You've joined ${result.workspace_name}`);
+            router.replace('/(tabs)');
+            return;
+          } else if (result.error_message) {
+            showWarningToast('Invite Issue', result.error_message);
+            // Continue to workspace setup
+          }
+        } catch (inviteErr: any) {
+          showWarningToast('Invite Failed', 'Could not process invite code. You can join later.');
+        }
+      }
+
+      showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
       // Pass the user's name for personalized placeholder
       router.replace({
         pathname: '/(auth)/workspace-setup',
@@ -103,6 +141,33 @@ export default function SignUpScreen() {
               Your family's financial memory,{'\n'}secured forever.
             </Text>
           </View>
+
+          {/* Invite Code Section */}
+          <Pressable
+            onPress={() => setShowInviteInput(!showInviteInput)}
+            style={styles.inviteToggle}
+          >
+            <Text style={styles.inviteToggleText}>
+              {showInviteInput ? '✕ Cancel invite code' : '🎟️ Have an invite code?'}
+            </Text>
+          </Pressable>
+
+          {showInviteInput && (
+            <View style={styles.inviteSection}>
+              <Text style={styles.inviteHint}>
+                Enter the code shared by your family member
+              </Text>
+              <TextInput
+                value={inviteCode}
+                onChangeText={(text) => setInviteCode(text.toUpperCase())}
+                placeholder="Enter invite code"
+                placeholderTextColor={Colors.textPlaceholder}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.inviteInput}
+              />
+            </View>
+          )}
 
           {/* Method Toggle */}
           <View style={styles.toggleContainer}>
@@ -465,5 +530,41 @@ const styles = StyleSheet.create({
   termsLink: {
     color: Colors.textSecondary,
     textDecorationLine: 'underline',
+  },
+  inviteToggle: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  inviteToggleText: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+  },
+  inviteSection: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: BorderRadius.lg,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  inviteHint: {
+    ...Typography.bodySm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  inviteInput: {
+    backgroundColor: Colors.inputBackground,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...Typography.body,
+    color: Colors.text,
+    textAlign: 'center',
+    letterSpacing: 2,
+    fontSize: 18,
   },
 });
