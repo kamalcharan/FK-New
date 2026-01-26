@@ -32,6 +32,10 @@ export default function SettingsScreen() {
     });
   };
 
+  const handleBackup = () => {
+    router.push('/backup');
+  };
+
   const handleLogout = async () => {
     await signOut();
     dispatch(logout());
@@ -74,6 +78,15 @@ export default function SettingsScreen() {
               <View style={styles.toggleKnob} />
             </View>
           </View>
+
+          <Pressable style={styles.settingItem} onPress={handleBackup}>
+            <Text style={styles.settingIcon}>☁️</Text>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>Backup & Restore</Text>
+              <Text style={styles.settingDescription}>Sync with Google Drive</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
 
           <View style={styles.settingItem}>
             <Text style={styles.settingIcon}>🔔</Text>
