@@ -19,7 +19,7 @@ export interface User {
 export interface Workspace {
   id: string;
   name: string;
-  created_by: string;
+  owner_id: string;
   created_at: string;
 }
 
