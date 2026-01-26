@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { supabase, isSupabaseReady } from '../../src/lib/supabase';
-import { isValidPhoneNumber } from '../../src/lib/msg91';
+import { isValidPhoneNumber } from '../../src/lib/otp';
 
 export default function SignInScreen() {
   const [identifier, setIdentifier] = useState(''); // email or phone

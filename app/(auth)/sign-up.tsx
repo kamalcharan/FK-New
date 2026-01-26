@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { sendOTP, isValidPhoneNumber } from '../../src/lib/msg91';
+import { sendOTP, isValidPhoneNumber } from '../../src/lib/otp';
 
 type SignUpMethod = 'phone' | 'email';
 
