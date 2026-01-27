@@ -44,24 +44,31 @@ const SCOPES = [
 
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
+console.log('[GoogleAuth] App ownership:', Constants.appOwnership, 'isExpoGo:', isExpoGo);
 
 // Get the appropriate redirect URI based on platform and environment
 export const getRedirectUri = () => {
   // For Expo Go, we MUST use the Expo auth proxy because Google doesn't accept exp:// URIs
-  if (isExpoGo) {
-    const proxyUri = `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
-    console.log('[GoogleAuth] Using Expo proxy redirect URI:', proxyUri);
-    return proxyUri;
-  }
+  // The proxy URL must be registered in Google Cloud Console
+  const proxyUri = `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
 
-  // For standalone/dev builds, use the custom scheme
-  const redirectUri = AuthSession.makeRedirectUri({
+  // Always log both URIs for debugging
+  const nativeUri = AuthSession.makeRedirectUri({
     scheme: 'familyknows',
     path: 'auth/callback',
   });
 
-  console.log('[GoogleAuth] Redirect URI:', redirectUri);
-  return redirectUri;
+  console.log('[GoogleAuth] Native redirect URI:', nativeUri);
+  console.log('[GoogleAuth] Proxy redirect URI:', proxyUri);
+  console.log('[GoogleAuth] Using proxy:', isExpoGo);
+
+  // For Expo Go, always use the proxy
+  if (isExpoGo) {
+    return proxyUri;
+  }
+
+  // For standalone/dev builds, use the custom scheme
+  return nativeUri;
 };
 
 // Get the redirect URI for setup reference
@@ -103,9 +110,6 @@ export const useGoogleAuth = () => {
   };
 
   return { request, response, promptAsync: wrappedPromptAsync, redirectUri };
-};
-
-  return { request, response, promptAsync, redirectUri };
 };
 
 // Exchange authorization code for tokens
