@@ -12,12 +12,15 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Contacts from 'expo-contacts';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../src/constants/theme';
 import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '../src/constants/currencies';
+import { countryCodeOptions, getDefaultCountryCode, CountryCode } from '../src/constants/countryCodes';
 import { useAppSelector } from '../src/hooks/useStore';
 import { createLoan, createLoanVerification, isSupabaseReady } from '../src/lib/supabase';
 import { showSuccessToast, showErrorToast } from '../src/components/ToastConfig';
@@ -32,6 +35,7 @@ export default function AddLoanScreen() {
 
   // Form state
   const [counterpartyName, setCounterpartyName] = useState('');
+  const [countryCode, setCountryCode] = useState<CountryCode>(getDefaultCountryCode());
   const [counterpartyPhone, setCounterpartyPhone] = useState('');
   const [counterpartyEmail, setCounterpartyEmail] = useState('');
   const [amount, setAmount] = useState('');
@@ -40,9 +44,16 @@ export default function AddLoanScreen() {
   const [notes, setNotes] = useState('');
   const [isHistorical, setIsHistorical] = useState(false);
 
+  // Date state
+  const [startDate, setStartDate] = useState(new Date());
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showCountryCodePicker, setShowCountryCodePicker] = useState(false);
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -91,9 +102,22 @@ export default function AddLoanScreen() {
     }
     if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
       let phone = contact.phoneNumbers[0].number || '';
+      // Remove spaces, dashes, parentheses
       phone = phone.replace(/[\s\-\(\)]/g, '');
-      if (phone.startsWith('+91')) phone = phone.slice(3);
-      if (phone.startsWith('91') && phone.length > 10) phone = phone.slice(2);
+      // Check for country codes and extract phone number
+      for (const cc of countryCodeOptions) {
+        if (phone.startsWith(cc.dial)) {
+          phone = phone.slice(cc.dial.length);
+          setCountryCode(cc);
+          break;
+        }
+        // Also check without + for India (91...)
+        if (phone.startsWith(cc.dial.slice(1)) && phone.length > 10) {
+          phone = phone.slice(cc.dial.length - 1);
+          setCountryCode(cc);
+          break;
+        }
+      }
       setCounterpartyPhone(phone);
     }
     if (contact.emails && contact.emails.length > 0) {
@@ -102,7 +126,29 @@ export default function AddLoanScreen() {
     setShowContactPicker(false);
   };
 
-  const handleSubmit = async () => {
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setStartDate(selectedDate);
+    }
+  };
+
+  const handleDueDateChange = (event: any, selectedDate?: Date) => {
+    setShowDueDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDueDate(selectedDate);
+    }
+  };
+
+  const getFullPhoneNumber = (): string => {
+    return `${countryCode.dial}${counterpartyPhone}`;
+  };
+
+  const handleSave = async (withVerification: boolean) => {
     if (!currentWorkspace?.id || !user?.id || !isSupabaseReady()) {
       showErrorToast('Error', 'Please sign in to create a loan');
       return;
@@ -113,7 +159,7 @@ export default function AddLoanScreen() {
       return;
     }
 
-    if (!isHistorical && !counterpartyPhone.trim()) {
+    if (withVerification && !counterpartyPhone.trim()) {
       showErrorToast('Phone required', 'Phone number is required for verification');
       return;
     }
@@ -121,27 +167,67 @@ export default function AddLoanScreen() {
     setIsSubmitting(true);
 
     try {
+      const fullPhone = counterpartyPhone.trim() ? getFullPhoneNumber() : undefined;
+
       const loan = await createLoan({
         workspace_id: currentWorkspace.id,
         created_by: user.id,
         loan_type: type || 'given',
         counterparty_name: counterpartyName.trim(),
-        counterparty_phone: counterpartyPhone.trim() || undefined,
+        counterparty_phone: fullPhone,
         principal_amount: parseFloat(amount),
-        loan_date: new Date().toISOString().split('T')[0],
+        loan_date: startDate.toISOString().split('T')[0],
+        due_date: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
         purpose: purpose.trim() || undefined,
         notes: notes.trim() || undefined,
+        currency: currency,
+        is_historical: isHistorical,
       });
 
-      if (!isHistorical && loan.id) {
+      if (withVerification && loan.id) {
         const verification = await createLoanVerification(loan.id, user.id);
+
         if (verification.success && verification.shareable_message) {
-          showSuccessToast('Loan recorded!', 'Share the verification code with ' + counterpartyName);
+          // Generate share content
+          const verificationCode = verification.verification_code || '------';
+          const currencySymbol = getCurrencySymbol(currency);
+          const shareMessage = `Hi ${counterpartyName.trim()},
+
+I've recorded a loan in FamilyKnows app:
+
+Amount: ${currencySymbol}${parseFloat(amount).toLocaleString()}
+Date: ${formatDate(startDate)}
+Type: ${isGiven ? 'Loan Given' : 'Loan Taken'}
+
+Please verify this transaction using the link below:
+https://familyknows.in/v/${verificationCode}
+
+Or enter code: ${verificationCode} at https://familyknows.in/verify
+
+This creates a trusted digital handshake between us.
+
+- ${user.user_metadata?.full_name || 'Your friend'}`;
+
+          try {
+            const result = await Share.share({
+              message: shareMessage,
+              title: 'Verify Loan - FamilyKnows',
+            });
+
+            if (result.action === Share.sharedAction) {
+              showSuccessToast('Shared!', 'Verification request sent');
+            } else if (result.action === Share.dismissedAction) {
+              showSuccessToast('Loan saved', 'Verification code: ' + verificationCode);
+            }
+          } catch (shareError) {
+            console.error('Share error:', shareError);
+            showSuccessToast('Loan saved', 'Code: ' + verificationCode + '. Share manually.');
+          }
         } else {
-          showSuccessToast('Loan recorded', 'Verification code generated');
+          showSuccessToast('Loan saved', 'Could not generate verification code');
         }
       } else {
-        showSuccessToast('Loan recorded', isHistorical ? 'Historical record saved' : 'Saved successfully');
+        showSuccessToast('Loan saved', isHistorical ? 'Historical record saved' : 'Saved without verification');
       }
 
       router.back();
@@ -154,7 +240,8 @@ export default function AddLoanScreen() {
   };
 
   const currencySymbol = getCurrencySymbol(currency);
-  const isFormValid = counterpartyName.trim() && amount && (isHistorical || counterpartyPhone.trim());
+  const isFormValid = counterpartyName.trim() && amount;
+  const canVerify = isFormValid && counterpartyPhone.trim() && !isHistorical;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -176,7 +263,7 @@ export default function AddLoanScreen() {
             >
               <Text style={styles.loanTypeEmoji}>🆕</Text>
               <Text style={[styles.loanTypeText, !isHistorical && styles.loanTypeTextActive]}>New Loan</Text>
-              <Text style={styles.loanTypeDesc}>Requires verification</Text>
+              <Text style={styles.loanTypeDesc}>Can be verified</Text>
             </Pressable>
             <Pressable
               style={[styles.loanTypeOption, isHistorical && styles.loanTypeActive]}
@@ -213,18 +300,25 @@ export default function AddLoanScreen() {
               </View>
             </View>
 
-            {/* Phone Number */}
+            {/* Phone Number with Country Code */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>PHONE NUMBER {!isHistorical && <Text style={styles.required}>*</Text>}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="10-digit mobile number"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="phone-pad"
-                value={counterpartyPhone}
-                onChangeText={setCounterpartyPhone}
-                maxLength={10}
-              />
+              <View style={styles.phoneRow}>
+                <Pressable style={styles.countryCodeButton} onPress={() => setShowCountryCodePicker(true)}>
+                  <Text style={styles.countryFlag}>{countryCode.flag}</Text>
+                  <Text style={styles.countryDial}>{countryCode.dial}</Text>
+                  <Text style={styles.countryChevron}>▼</Text>
+                </Pressable>
+                <TextInput
+                  style={[styles.input, styles.phoneInput]}
+                  placeholder="Phone number"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="phone-pad"
+                  value={counterpartyPhone}
+                  onChangeText={setCounterpartyPhone}
+                  maxLength={15}
+                />
+              </View>
               {!isHistorical && <Text style={styles.helperText}>Required for verification via WhatsApp</Text>}
             </View>
 
@@ -262,6 +356,36 @@ export default function AddLoanScreen() {
               </View>
             </View>
 
+            {/* Loan Duration - Start Date */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>LOAN DATE</Text>
+              <Pressable style={styles.dateButton} onPress={() => setShowStartDatePicker(true)}>
+                <Text style={styles.dateIcon}>📅</Text>
+                <Text style={styles.dateText}>{formatDate(startDate)}</Text>
+                <Text style={styles.dateChevron}>▼</Text>
+              </Pressable>
+            </View>
+
+            {/* Due Date (Optional) */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>DUE DATE (OPTIONAL)</Text>
+              <View style={styles.dueDateRow}>
+                <Pressable
+                  style={[styles.dateButton, styles.dueDateButton]}
+                  onPress={() => setShowDueDatePicker(true)}
+                >
+                  <Text style={styles.dateIcon}>📆</Text>
+                  <Text style={styles.dateText}>{dueDate ? formatDate(dueDate) : 'No due date set'}</Text>
+                  <Text style={styles.dateChevron}>▼</Text>
+                </Pressable>
+                {dueDate && (
+                  <Pressable style={styles.clearDateButton} onPress={() => setDueDate(null)}>
+                    <Text style={styles.clearDateText}>✕</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
             {/* Purpose */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>PURPOSE (OPTIONAL)</Text>
@@ -288,14 +412,14 @@ export default function AddLoanScreen() {
               />
             </View>
 
-            {/* Verification Note */}
+            {/* Info Note */}
             {!isHistorical ? (
               <View style={styles.verificationNote}>
                 <Text style={styles.verificationIcon}>🤝</Text>
                 <View style={styles.verificationTextContainer}>
                   <Text style={styles.verificationTitle}>Digital Handshake</Text>
                   <Text style={styles.verificationText}>
-                    A 6-digit code will be generated. Share it via WhatsApp for verification.
+                    Choose "Save & Share" to send a verification code via WhatsApp. The counterparty verifies on our website.
                   </Text>
                 </View>
               </View>
@@ -310,22 +434,65 @@ export default function AddLoanScreen() {
             )}
           </View>
 
-          {/* Submit Button */}
-          <Pressable
-            style={[styles.submitButton, (!isFormValid || isSubmitting) && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={!isFormValid || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={styles.submitButtonText}>
-                {isHistorical ? 'Save Record' : isGiven ? 'Record & Get Verification Code' : 'Record Loan'}
-              </Text>
+          {/* Submit Buttons */}
+          <View style={styles.submitButtons}>
+            {/* Save Only Button */}
+            <Pressable
+              style={[styles.saveOnlyButton, (!isFormValid || isSubmitting) && styles.buttonDisabled]}
+              onPress={() => handleSave(false)}
+              disabled={!isFormValid || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={Colors.text} size="small" />
+              ) : (
+                <>
+                  <Text style={styles.saveOnlyIcon}>💾</Text>
+                  <Text style={styles.saveOnlyText}>Save Record</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Save & Share Button - Only for non-historical loans */}
+            {!isHistorical && (
+              <Pressable
+                style={[styles.shareButton, (!canVerify || isSubmitting) && styles.buttonDisabled]}
+                onPress={() => handleSave(true)}
+                disabled={!canVerify || isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#000" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.shareButtonIcon}>📤</Text>
+                    <Text style={styles.shareButtonText}>Save & Share for Verification</Text>
+                  </>
+                )}
+              </Pressable>
             )}
-          </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Date Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={startDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleStartDateChange}
+          maximumDate={new Date()}
+        />
+      )}
+
+      {showDueDatePicker && (
+        <DateTimePicker
+          value={dueDate || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDueDateChange}
+          minimumDate={startDate}
+        />
+      )}
 
       {/* Currency Picker Modal */}
       <Modal visible={showCurrencyPicker} transparent animationType="slide">
@@ -337,15 +504,41 @@ export default function AddLoanScreen() {
               keyExtractor={item => item.code}
               renderItem={({ item }) => (
                 <Pressable
-                  style={[styles.currencyOption, currency === item.code && styles.currencyOptionActive]}
+                  style={[styles.pickerOption, currency === item.code && styles.pickerOptionActive]}
                   onPress={() => { setCurrency(item.code); setShowCurrencyPicker(false); }}
                 >
-                  <Text style={styles.currencyOptionSymbol}>{item.symbol}</Text>
-                  <View style={styles.currencyOptionText}>
-                    <Text style={styles.currencyOptionCode}>{item.code}</Text>
-                    <Text style={styles.currencyOptionName}>{item.name}</Text>
+                  <Text style={styles.pickerOptionSymbol}>{item.symbol}</Text>
+                  <View style={styles.pickerOptionText}>
+                    <Text style={styles.pickerOptionCode}>{item.code}</Text>
+                    <Text style={styles.pickerOptionName}>{item.name}</Text>
                   </View>
-                  {currency === item.code && <Text style={styles.currencyCheck}>✓</Text>}
+                  {currency === item.code && <Text style={styles.pickerCheck}>✓</Text>}
+                </Pressable>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Country Code Picker Modal */}
+      <Modal visible={showCountryCodePicker} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCountryCodePicker(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Country Code</Text>
+            <FlatList
+              data={countryCodeOptions}
+              keyExtractor={item => item.code}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={[styles.pickerOption, countryCode.code === item.code && styles.pickerOptionActive]}
+                  onPress={() => { setCountryCode(item); setShowCountryCodePicker(false); }}
+                >
+                  <Text style={styles.pickerOptionSymbol}>{item.flag}</Text>
+                  <View style={styles.pickerOptionText}>
+                    <Text style={styles.pickerOptionCode}>{item.dial}</Text>
+                    <Text style={styles.pickerOptionName}>{item.name}</Text>
+                  </View>
+                  {countryCode.code === item.code && <Text style={styles.pickerCheck}>✓</Text>}
                 </Pressable>
               )}
             />
@@ -454,12 +647,31 @@ const styles = StyleSheet.create({
   contactButton: { ...GlassStyle, borderRadius: BorderRadius.lg, width: 52, alignItems: 'center', justifyContent: 'center' },
   contactButtonText: { fontSize: 20 },
 
+  // Phone input with country code
+  phoneRow: { flexDirection: 'row', gap: 12 },
+  countryCodeButton: { ...GlassStyle, borderRadius: BorderRadius.lg, paddingHorizontal: 14, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  countryFlag: { fontSize: 18 },
+  countryDial: { ...Typography.body, color: Colors.text },
+  countryChevron: { fontSize: 10, color: Colors.textMuted },
+  phoneInput: { flex: 1 },
+
+  // Amount row
   amountRow: { flexDirection: 'row', gap: 12 },
   currencyButton: { ...GlassStyle, borderRadius: BorderRadius.lg, paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   currencySymbol: { fontSize: 18, color: Colors.text },
   currencyCode: { ...Typography.bodySm, color: Colors.textMuted },
   currencyChevron: { fontSize: 10, color: Colors.textMuted },
   amountInput: { flex: 1 },
+
+  // Date buttons
+  dateButton: { ...GlassStyle, borderRadius: BorderRadius.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dateIcon: { fontSize: 18 },
+  dateText: { ...Typography.body, color: Colors.text, flex: 1 },
+  dateChevron: { fontSize: 10, color: Colors.textMuted },
+  dueDateRow: { flexDirection: 'row', gap: 12 },
+  dueDateButton: { flex: 1 },
+  clearDateButton: { ...GlassStyle, borderRadius: BorderRadius.lg, width: 52, alignItems: 'center', justifyContent: 'center' },
+  clearDateText: { fontSize: 16, color: Colors.textMuted },
 
   verificationNote: { ...GlassStyle, borderRadius: BorderRadius.xl, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderColor: 'rgba(99, 102, 241, 0.3)' },
   historicalNote: { backgroundColor: 'rgba(100, 116, 139, 0.1)', borderColor: 'rgba(100, 116, 139, 0.3)' },
@@ -468,21 +680,43 @@ const styles = StyleSheet.create({
   verificationTitle: { ...Typography.bodySm, fontFamily: 'Inter_600SemiBold', color: Colors.text, marginBottom: 4 },
   verificationText: { ...Typography.bodySm, color: Colors.textSecondary, lineHeight: 18 },
 
-  submitButton: { backgroundColor: Colors.text, paddingVertical: 16, borderRadius: BorderRadius.xl, alignItems: 'center' },
-  submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { ...Typography.button, color: '#000' },
+  // Submit buttons
+  submitButtons: { gap: 12 },
+  saveOnlyButton: {
+    ...GlassStyle,
+    paddingVertical: 16,
+    borderRadius: BorderRadius.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveOnlyIcon: { fontSize: 18 },
+  saveOnlyText: { ...Typography.button, color: Colors.text },
+  shareButton: {
+    backgroundColor: Colors.text,
+    paddingVertical: 16,
+    borderRadius: BorderRadius.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  shareButtonIcon: { fontSize: 18 },
+  shareButtonText: { ...Typography.button, color: '#000' },
+  buttonDisabled: { opacity: 0.5 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: Colors.background, borderTopLeftRadius: BorderRadius['3xl'], borderTopRightRadius: BorderRadius['3xl'], maxHeight: '70%', paddingTop: 20 },
   modalTitle: { ...Typography.h3, color: Colors.text, textAlign: 'center', marginBottom: 16 },
 
-  currencyOption: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  currencyOptionActive: { backgroundColor: 'rgba(99, 102, 241, 0.1)' },
-  currencyOptionSymbol: { fontSize: 20, width: 40, textAlign: 'center', color: Colors.text },
-  currencyOptionText: { flex: 1 },
-  currencyOptionCode: { ...Typography.body, color: Colors.text, fontFamily: 'Inter_600SemiBold' },
-  currencyOptionName: { ...Typography.bodySm, color: Colors.textMuted },
-  currencyCheck: { fontSize: 18, color: Colors.primary },
+  pickerOption: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  pickerOptionActive: { backgroundColor: 'rgba(99, 102, 241, 0.1)' },
+  pickerOptionSymbol: { fontSize: 20, width: 40, textAlign: 'center', color: Colors.text },
+  pickerOptionText: { flex: 1 },
+  pickerOptionCode: { ...Typography.body, color: Colors.text, fontFamily: 'Inter_600SemiBold' },
+  pickerOptionName: { ...Typography.bodySm, color: Colors.textMuted },
+  pickerCheck: { fontSize: 18, color: Colors.primary },
 
   searchContainer: {
     flexDirection: 'row',

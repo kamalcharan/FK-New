@@ -266,6 +266,8 @@ export const createLoan = async (loan: {
   due_date?: string;
   purpose?: string;
   notes?: string;
+  currency?: string;
+  is_historical?: boolean;
 }) => {
   if (!supabase) throw new Error('Supabase not configured');
 
