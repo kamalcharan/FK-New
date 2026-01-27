@@ -9,6 +9,7 @@ import { useAppSelector } from '../../src/hooks/useStore';
 import {
   getDashboardStats,
   getUpcomingAlerts,
+  isDemoModeEnabled,
   DashboardStats,
   UpcomingAlert,
   isSupabaseReady,
@@ -31,6 +32,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<UpcomingAlert[]>([]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!currentWorkspace?.id || !isSupabaseReady()) {
@@ -39,18 +41,20 @@ export default function DashboardScreen() {
     }
 
     try {
-      const [statsData, alertsData] = await Promise.all([
+      const [statsData, alertsData, demoStatus] = await Promise.all([
         getDashboardStats(currentWorkspace.id),
         getUpcomingAlerts(currentWorkspace.id),
+        user?.id ? isDemoModeEnabled(user.id) : Promise.resolve(false),
       ]);
       setStats(statsData);
       setAlerts(alertsData);
+      setIsDemoMode(demoStatus);
     } catch (err) {
       console.error('Error loading dashboard:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [currentWorkspace?.id]);
+  }, [currentWorkspace?.id, user?.id]);
 
   useEffect(() => {
     loadData();
@@ -188,6 +192,23 @@ export default function DashboardScreen() {
         ) : (
           /* Data State - Show when there's data */
           <>
+            {/* Demo Mode Banner */}
+            {isDemoMode && (
+              <Pressable
+                style={styles.demoBanner}
+                onPress={() => router.push('/settings')}
+              >
+                <View style={styles.demoBannerContent}>
+                  <Text style={styles.demoBannerIcon}>✨</Text>
+                  <View style={styles.demoBannerText}>
+                    <Text style={styles.demoBannerTitle}>Demo Mode Active</Text>
+                    <Text style={styles.demoBannerSubtitle}>You're viewing sample data. Tap to disable.</Text>
+                  </View>
+                </View>
+                <Ionicons name="close-circle" size={20} color="rgba(251, 191, 36, 0.7)" />
+              </Pressable>
+            )}
+
             {/* Urgent Alert Card */}
             {alerts.length > 0 && (
               <View style={[styles.alertCard, alerts[0].daysLeft <= 7 ? styles.alertCardRed : styles.alertCardAmber]}>
@@ -341,6 +362,41 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Demo Mode Banner
+  demoBanner: {
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderRadius: BorderRadius.xl,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  demoBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  demoBannerIcon: {
+    fontSize: 20,
+  },
+  demoBannerText: {
+    flex: 1,
+  },
+  demoBannerTitle: {
+    ...Typography.bodySm,
+    color: '#fbbf24',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  demoBannerSubtitle: {
+    ...Typography.caption,
+    color: 'rgba(251, 191, 36, 0.8)',
+    marginTop: 2,
   },
 
   // Empty State
