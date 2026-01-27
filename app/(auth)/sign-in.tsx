@@ -1,5 +1,5 @@
 // app/(auth)/sign-in.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,43 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile } from '../../src/lib/supabase';
+import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists } from '../../src/lib/supabase';
 import { isValidPhoneNumber } from '../../src/lib/otp';
-import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
+import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
+import {
+  useGoogleAuth,
+  exchangeCodeForTokens,
+  signInWithGoogleToken,
+  storeGoogleTokens,
+  isGoogleAuthConfigured,
+  getGoogleUserInfo,
+} from '../../src/lib/googleAuth';
+
+// Helper to wait for user records to be created by DB trigger
+const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boolean> => {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const [userExists, profile] = await Promise.all([
+        checkFkUserExists(userId),
+        getUserProfile(userId),
+      ]);
+      if (userExists && profile) return true;
+    } catch (err) {
+      // Ignore errors during retry
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  return false;
+};
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();
@@ -27,7 +53,11 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Google Auth hook
+  const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
 
   // Detect if input is phone or email
   const isPhone = /^\d+$/.test(identifier.replace(/\D/g, '')) && identifier.length <= 12;
@@ -104,10 +134,106 @@ export default function SignInScreen() {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    // TODO: Implement Google OAuth with Drive scope
-    // For now, go through index for proper routing
-    router.replace('/');
+  // Handle Google OAuth response
+  useEffect(() => {
+    const handleGoogleResponse = async () => {
+      if (googleResponse?.type === 'success' && googleResponse.params.code) {
+        setIsGoogleLoading(true);
+        try {
+          // Exchange code for tokens
+          const tokens = await exchangeCodeForTokens(
+            googleResponse.params.code,
+            googleRequest?.codeVerifier || '',
+            redirectUri
+          );
+
+          if (!tokens) {
+            showErrorToast('Google Sign-In Failed', 'Could not authenticate with Google');
+            return;
+          }
+
+          // Sign in to Supabase with the ID token
+          const { user, session } = await signInWithGoogleToken(tokens.id_token);
+
+          if (!user) {
+            showErrorToast('Sign-In Failed', 'Could not create account');
+            return;
+          }
+
+          // Store Google tokens for Drive access
+          await storeGoogleTokens({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+          });
+
+          // Get user info for Redux
+          const googleUser = await getGoogleUserInfo(tokens.access_token);
+
+          // Update Redux with user info
+          dispatch(setUser({
+            id: user.id,
+            email: user.email || googleUser?.email || '',
+            full_name: user.user_metadata?.full_name || googleUser?.name,
+            avatar_url: user.user_metadata?.avatar_url || googleUser?.picture,
+            created_at: user.created_at,
+          }));
+
+          // Wait for DB trigger to create user records
+          await waitForUserRecords(user.id);
+
+          // Fetch workspace and profile to determine navigation
+          const [workspace, profile] = await Promise.all([
+            getWorkspaceForUser(user.id),
+            getUserProfile(user.id),
+          ]);
+
+          // Determine where to navigate
+          if (!workspace) {
+            showSuccessToast('Welcome!', 'Let\'s set up your vault');
+            router.replace({
+              pathname: '/(auth)/workspace-setup',
+              params: { userName: googleUser?.name || '' },
+            });
+          } else if (!profile?.onboarding_completed) {
+            dispatch(setWorkspace(workspace));
+            showSuccessToast('Welcome Back', 'Continue setting up your vault');
+            router.replace({
+              pathname: '/(auth)/family-invite',
+              params: {
+                workspaceName: workspace.name,
+                workspaceId: workspace.id,
+              },
+            });
+          } else {
+            dispatch(setWorkspace(workspace));
+            showSuccessToast('Welcome Back', 'Signed in with Google');
+            router.replace('/(tabs)');
+          }
+        } catch (err: any) {
+          console.error('[GoogleAuth] Error:', err);
+          showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
+        } finally {
+          setIsGoogleLoading(false);
+        }
+      } else if (googleResponse?.type === 'error') {
+        showErrorToast('Google Sign-In Failed', googleResponse.error?.message || 'Please try again');
+      }
+    };
+
+    handleGoogleResponse();
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async () => {
+    if (!isGoogleAuthConfigured()) {
+      showWarningToast('Not Configured', 'Google Sign-In is not configured yet');
+      return;
+    }
+
+    try {
+      await googlePromptAsync();
+    } catch (err: any) {
+      showErrorToast('Error', 'Could not start Google Sign-In');
+    }
   };
 
   const handleForgotPassword = () => {
@@ -221,9 +347,19 @@ export default function SignInScreen() {
           </View>
 
           {/* Google Sign In */}
-          <Pressable onPress={handleGoogleSignIn} style={styles.googleButton}>
-            <Text style={styles.googleIcon}>G</Text>
-            <Text style={styles.googleText}>Continue with Google</Text>
+          <Pressable
+            onPress={handleGoogleSignIn}
+            style={[styles.googleButton, (isGoogleLoading || !googleRequest) && styles.googleButtonDisabled]}
+            disabled={isGoogleLoading || !googleRequest}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator size="small" color="#1a1a1a" />
+            ) : (
+              <Text style={styles.googleIcon}>G</Text>
+            )}
+            <Text style={styles.googleText}>
+              {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
+            </Text>
           </Pressable>
 
           {/* Sign Up Link */}
@@ -374,6 +510,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 12,
     marginBottom: 32,
+  },
+  googleButtonDisabled: {
+    opacity: 0.7,
   },
   googleIcon: {
     fontSize: 20,
