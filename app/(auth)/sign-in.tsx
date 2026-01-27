@@ -128,60 +128,37 @@ export default function SignInScreen() {
       if (!result) {
         // User cancelled
         console.log('[GoogleSignIn] User cancelled sign-in');
+        setIsGoogleLoading(false);
         return;
       }
 
-      const { user, session } = result;
+      const { user } = result;
 
       if (!user) {
         showErrorToast('Sign-In Failed', 'Could not sign in with Google');
+        setIsGoogleLoading(false);
         return;
       }
 
-      // Update Redux with user info
-      dispatch(setUser({
-        id: user.id,
-        email: user.email || '',
-        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
-        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        created_at: user.created_at,
-      }));
+      console.log('[GoogleSignIn] Auth successful, user:', user.id);
 
       // Wait for DB trigger to create user records
+      console.log('[GoogleSignIn] Waiting for user records...');
       await waitForUserRecords(user.id);
 
-      // Fetch workspace and profile to determine navigation
-      const [workspace, profile] = await Promise.all([
-        getWorkspaceForUser(user.id),
-        getUserProfile(user.id),
-      ]);
+      // Show success message
+      showSuccessToast('Welcome Back!', 'Signed in with Google');
 
-      // Determine where to navigate
-      if (!workspace) {
-        showSuccessToast('Welcome!', 'Let\'s set up your vault');
-        router.replace({
-          pathname: '/(auth)/workspace-setup',
-          params: { userName: user.user_metadata?.name || '' },
-        });
-      } else if (!profile?.onboarding_completed) {
-        dispatch(setWorkspace(workspace));
-        showSuccessToast('Welcome Back', 'Continue setting up your vault');
-        router.replace({
-          pathname: '/(auth)/family-invite',
-          params: {
-            workspaceName: workspace.name,
-            workspaceId: workspace.id,
-          },
-        });
-      } else {
-        dispatch(setWorkspace(workspace));
-        showSuccessToast('Welcome Back', 'Signed in with Google');
-        router.replace('/(tabs)');
-      }
+      // Let index.tsx handle routing based on auth state
+      // Small delay to let auth state settle
+      setTimeout(() => {
+        setIsGoogleLoading(false);
+        router.replace('/');
+      }, 100);
+
     } catch (err: any) {
       console.error('[GoogleSignIn] Error:', err);
       showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
-    } finally {
       setIsGoogleLoading(false);
     }
   };

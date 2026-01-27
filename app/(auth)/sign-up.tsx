@@ -182,74 +182,51 @@ export default function SignUpScreen() {
       if (!result) {
         // User cancelled
         console.log('[GoogleSignUp] User cancelled sign-up');
+        setIsGoogleLoading(false);
         return;
       }
 
-      const { user, session } = result;
+      const { user } = result;
 
       if (!user) {
         showErrorToast('Sign-Up Failed', 'Could not create account');
+        setIsGoogleLoading(false);
         return;
       }
 
-      // Update Redux with user info
-      dispatch(setUser({
-        id: user.id,
-        email: user.email || '',
-        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
-        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        created_at: user.created_at,
-      }));
+      console.log('[GoogleSignUp] Auth successful, user:', user.id);
 
       // Wait for DB trigger to create user records
+      console.log('[GoogleSignUp] Waiting for user records...');
       await waitForUserRecords(user.id);
 
       // If we have an invite code, try to accept it
       if (inviteCodeParam) {
         try {
+          console.log('[GoogleSignUp] Processing invite code...');
           const inviteResult = await acceptFamilyInvite(inviteCodeParam, user.id);
           if (inviteResult.success && inviteResult.workspace_id) {
-            dispatch(setWorkspace({
-              id: inviteResult.workspace_id,
-              name: inviteResult.workspace_name || 'Family Vault',
-              owner_id: '',
-              created_at: new Date().toISOString(),
-            }));
             await updateOnboardingStatus(user.id, true);
             showSuccessToast('Welcome!', `You've joined ${inviteResult.workspace_name}`);
-            router.replace('/(tabs)');
-            return;
           }
         } catch (inviteErr) {
           console.warn('[GoogleSignUp] Invite error:', inviteErr);
         }
       }
 
-      // Check if user already has a workspace
-      const workspace = await getWorkspaceForUser(user.id);
-      if (workspace) {
-        dispatch(setWorkspace(workspace));
-        const profile = await getUserProfile(user.id);
-        if (profile?.onboarding_completed) {
-          showSuccessToast('Welcome Back', 'Signed in with Google');
-          router.replace('/(tabs)');
-        } else {
-          router.replace({
-            pathname: '/(auth)/family-invite',
-            params: { workspaceName: workspace.name, workspaceId: workspace.id },
-          });
-        }
-      } else {
-        showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
-        router.replace({
-          pathname: '/(auth)/workspace-setup',
-          params: { userName: user.user_metadata?.name || '' },
-        });
-      }
+      // Show success message
+      showSuccessToast('Success!', 'Signed in with Google');
+
+      // Let index.tsx handle routing based on auth state
+      // Small delay to let auth state settle
+      setTimeout(() => {
+        setIsGoogleLoading(false);
+        router.replace('/');
+      }, 100);
+
     } catch (err: any) {
       console.error('[GoogleSignUp] Error:', err);
       showErrorToast('Google Sign-Up Failed', err.message || 'Please try again');
-    } finally {
       setIsGoogleLoading(false);
     }
   };
