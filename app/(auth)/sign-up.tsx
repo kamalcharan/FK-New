@@ -1,5 +1,5 @@
 // app/(auth)/sign-up.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -17,15 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signUpWithEmail, isSupabaseReady, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists, getWorkspaceForUser } from '../../src/lib/supabase';
-import {
-  useGoogleAuth,
-  exchangeCodeForTokens,
-  signInWithGoogleToken,
-  storeGoogleTokens,
-  isGoogleAuthConfigured,
-  getGoogleUserInfo,
-} from '../../src/lib/googleAuth';
+import { signUpWithEmail, isSupabaseReady, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists, getWorkspaceForUser, signInWithGoogle } from '../../src/lib/supabase';
+import { isGoogleAuthConfigured } from '../../src/lib/googleAuth';
 import { setUser } from '../../src/store/slices/authSlice';
 
 // Helper to wait for user records to be created by DB trigger
@@ -86,9 +79,6 @@ export default function SignUpScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Google Auth hook
-  const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isPasswordValid = password.length >= 8;
@@ -181,144 +171,86 @@ export default function SignUpScreen() {
     }
   };
 
-  // Handle Google OAuth response
-  useEffect(() => {
-    const handleGoogleResponse = async () => {
-      if (googleResponse?.type === 'success' && googleResponse.params.code) {
-        setIsGoogleLoading(true);
-        try {
-          // Exchange code for tokens
-          const tokens = await exchangeCodeForTokens(
-            googleResponse.params.code,
-            googleRequest?.codeVerifier || '',
-            redirectUri
-          );
-
-          if (!tokens) {
-            showErrorToast('Google Sign-Up Failed', 'Could not authenticate with Google');
-            return;
-          }
-
-          // Sign in to Supabase with the ID token
-          const { user, session } = await signInWithGoogleToken(tokens.id_token);
-
-          if (!user) {
-            showErrorToast('Sign-Up Failed', 'Could not create account');
-            return;
-          }
-
-          // Store Google tokens for Drive access
-          await storeGoogleTokens({
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          });
-
-          // Get user info for Redux
-          const googleUser = await getGoogleUserInfo(tokens.access_token);
-
-          // Update Redux with user info
-          dispatch(setUser({
-            id: user.id,
-            email: user.email || googleUser?.email || '',
-            full_name: user.user_metadata?.full_name || googleUser?.name,
-            avatar_url: user.user_metadata?.avatar_url || googleUser?.picture,
-            created_at: user.created_at,
-          }));
-
-          // Wait for DB trigger to create user records
-          await waitForUserRecords(user.id);
-
-          // If we have an invite code, try to accept it
-          if (inviteCodeParam) {
-            try {
-              const result = await acceptFamilyInvite(inviteCodeParam, user.id);
-              if (result.success && result.workspace_id) {
-                dispatch(setWorkspace({
-                  id: result.workspace_id,
-                  name: result.workspace_name || 'Family Vault',
-                  owner_id: '',
-                  created_at: new Date().toISOString(),
-                }));
-                await updateOnboardingStatus(user.id, true);
-                showSuccessToast('Welcome!', `You've joined ${result.workspace_name}`);
-                router.replace('/(tabs)');
-                return;
-              }
-            } catch (inviteErr) {
-              console.warn('[GoogleSignUp] Invite error:', inviteErr);
-            }
-          }
-
-          // Check if user already has a workspace
-          const workspace = await getWorkspaceForUser(user.id);
-          if (workspace) {
-            dispatch(setWorkspace(workspace));
-            const profile = await getUserProfile(user.id);
-            if (profile?.onboarding_completed) {
-              showSuccessToast('Welcome Back', 'Signed in with Google');
-              router.replace('/(tabs)');
-            } else {
-              router.replace({
-                pathname: '/(auth)/family-invite',
-                params: { workspaceName: workspace.name, workspaceId: workspace.id },
-              });
-            }
-          } else {
-            showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
-            router.replace({
-              pathname: '/(auth)/workspace-setup',
-              params: { userName: googleUser?.name || '' },
-            });
-          }
-        } catch (err: any) {
-          console.error('[GoogleSignUp] Error:', err);
-          showErrorToast('Google Sign-Up Failed', err.message || 'Please try again');
-        } finally {
-          setIsGoogleLoading(false);
-        }
-      } else if (googleResponse?.type === 'error') {
-        console.error('[GoogleSignUp] Auth error:', googleResponse.error);
-        const errorMsg = googleResponse.error?.message || '';
-
-        // Handle specific Google OAuth errors
-        if (errorMsg.includes('access_blocked') || errorMsg.includes('Authorization Error')) {
-          showErrorToast(
-            'Access Blocked',
-            'Please check Google Cloud Console configuration. Redirect URI may not be registered.'
-          );
-        } else if (errorMsg.includes('redirect_uri_mismatch')) {
-          showErrorToast(
-            'Configuration Error',
-            'Redirect URI mismatch. Check Google Cloud Console settings.'
-          );
-        } else {
-          showErrorToast('Google Sign-Up Failed', errorMsg || 'Please try again');
-        }
-      } else if (googleResponse?.type === 'dismiss') {
-        // User dismissed - no error needed
-        console.log('[GoogleSignUp] User dismissed sign-up');
-      }
-    };
-
-    handleGoogleResponse();
-  }, [googleResponse]);
-
+  // Handle Google Sign-up using Supabase OAuth
   const handleGoogleSignUp = async () => {
-    if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Add EXPO_PUBLIC_GOOGLE_CLIENT_ID to your .env file');
-      console.log('[GoogleSignUp] Client ID not configured');
-      console.log('[GoogleSignUp] Redirect URI would be:', redirectUri);
-      return;
-    }
-
-    console.log('[GoogleSignUp] Starting sign-up with redirect URI:', redirectUri);
-
+    setIsGoogleLoading(true);
     try {
-      const result = await googlePromptAsync();
-      console.log('[GoogleSignUp] Prompt result:', result?.type);
+      console.log('[GoogleSignUp] Starting Supabase Google OAuth...');
+
+      const result = await signInWithGoogle();
+
+      if (!result) {
+        // User cancelled
+        console.log('[GoogleSignUp] User cancelled sign-up');
+        return;
+      }
+
+      const { user, session } = result;
+
+      if (!user) {
+        showErrorToast('Sign-Up Failed', 'Could not create account');
+        return;
+      }
+
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
+      // Wait for DB trigger to create user records
+      await waitForUserRecords(user.id);
+
+      // If we have an invite code, try to accept it
+      if (inviteCodeParam) {
+        try {
+          const inviteResult = await acceptFamilyInvite(inviteCodeParam, user.id);
+          if (inviteResult.success && inviteResult.workspace_id) {
+            dispatch(setWorkspace({
+              id: inviteResult.workspace_id,
+              name: inviteResult.workspace_name || 'Family Vault',
+              owner_id: '',
+              created_at: new Date().toISOString(),
+            }));
+            await updateOnboardingStatus(user.id, true);
+            showSuccessToast('Welcome!', `You've joined ${inviteResult.workspace_name}`);
+            router.replace('/(tabs)');
+            return;
+          }
+        } catch (inviteErr) {
+          console.warn('[GoogleSignUp] Invite error:', inviteErr);
+        }
+      }
+
+      // Check if user already has a workspace
+      const workspace = await getWorkspaceForUser(user.id);
+      if (workspace) {
+        dispatch(setWorkspace(workspace));
+        const profile = await getUserProfile(user.id);
+        if (profile?.onboarding_completed) {
+          showSuccessToast('Welcome Back', 'Signed in with Google');
+          router.replace('/(tabs)');
+        } else {
+          router.replace({
+            pathname: '/(auth)/family-invite',
+            params: { workspaceName: workspace.name, workspaceId: workspace.id },
+          });
+        }
+      } else {
+        showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName: user.user_metadata?.name || '' },
+        });
+      }
     } catch (err: any) {
-      console.error('[GoogleSignUp] Prompt error:', err);
-      showErrorToast('Error', err.message || 'Could not start Google Sign-Up');
+      console.error('[GoogleSignUp] Error:', err);
+      showErrorToast('Google Sign-Up Failed', err.message || 'Please try again');
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -468,8 +400,8 @@ export default function SignUpScreen() {
           {/* Google Sign Up */}
           <Pressable
             onPress={handleGoogleSignUp}
-            style={[styles.googleButton, (isGoogleLoading || !googleRequest) && styles.googleButtonDisabled]}
-            disabled={isGoogleLoading || !googleRequest}
+            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]}
+            disabled={isGoogleLoading}
           >
             {isGoogleLoading ? (
               <ActivityIndicator size="small" color="#1a1a1a" />

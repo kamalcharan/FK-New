@@ -1,5 +1,5 @@
 // app/(auth)/sign-in.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -16,19 +16,11 @@ import { router } from 'expo-router';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists } from '../../src/lib/supabase';
-import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
+import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists, signInWithGoogle } from '../../src/lib/supabase';
+import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
-import {
-  useGoogleAuth,
-  exchangeCodeForTokens,
-  signInWithGoogleToken,
-  storeGoogleTokens,
-  isGoogleAuthConfigured,
-  getGoogleUserInfo,
-} from '../../src/lib/googleAuth';
 
 // Helper to wait for user records to be created by DB trigger
 const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boolean> => {
@@ -55,9 +47,6 @@ export default function SignInScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Google Auth hook
-  const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
 
   // Validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -128,130 +117,72 @@ export default function SignInScreen() {
     }
   };
 
-  // Handle Google OAuth response
-  useEffect(() => {
-    const handleGoogleResponse = async () => {
-      if (googleResponse?.type === 'success' && googleResponse.params.code) {
-        setIsGoogleLoading(true);
-        try {
-          // Exchange code for tokens
-          const tokens = await exchangeCodeForTokens(
-            googleResponse.params.code,
-            googleRequest?.codeVerifier || '',
-            redirectUri
-          );
-
-          if (!tokens) {
-            showErrorToast('Google Sign-In Failed', 'Could not authenticate with Google');
-            return;
-          }
-
-          // Sign in to Supabase with the ID token
-          const { user, session } = await signInWithGoogleToken(tokens.id_token);
-
-          if (!user) {
-            showErrorToast('Sign-In Failed', 'Could not create account');
-            return;
-          }
-
-          // Store Google tokens for Drive access
-          await storeGoogleTokens({
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          });
-
-          // Get user info for Redux
-          const googleUser = await getGoogleUserInfo(tokens.access_token);
-
-          // Update Redux with user info
-          dispatch(setUser({
-            id: user.id,
-            email: user.email || googleUser?.email || '',
-            full_name: user.user_metadata?.full_name || googleUser?.name,
-            avatar_url: user.user_metadata?.avatar_url || googleUser?.picture,
-            created_at: user.created_at,
-          }));
-
-          // Wait for DB trigger to create user records
-          await waitForUserRecords(user.id);
-
-          // Fetch workspace and profile to determine navigation
-          const [workspace, profile] = await Promise.all([
-            getWorkspaceForUser(user.id),
-            getUserProfile(user.id),
-          ]);
-
-          // Determine where to navigate
-          if (!workspace) {
-            showSuccessToast('Welcome!', 'Let\'s set up your vault');
-            router.replace({
-              pathname: '/(auth)/workspace-setup',
-              params: { userName: googleUser?.name || '' },
-            });
-          } else if (!profile?.onboarding_completed) {
-            dispatch(setWorkspace(workspace));
-            showSuccessToast('Welcome Back', 'Continue setting up your vault');
-            router.replace({
-              pathname: '/(auth)/family-invite',
-              params: {
-                workspaceName: workspace.name,
-                workspaceId: workspace.id,
-              },
-            });
-          } else {
-            dispatch(setWorkspace(workspace));
-            showSuccessToast('Welcome Back', 'Signed in with Google');
-            router.replace('/(tabs)');
-          }
-        } catch (err: any) {
-          console.error('[GoogleAuth] Error:', err);
-          showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
-        } finally {
-          setIsGoogleLoading(false);
-        }
-      } else if (googleResponse?.type === 'error') {
-        console.error('[GoogleAuth] Auth error:', googleResponse.error);
-        const errorMsg = googleResponse.error?.message || '';
-
-        // Handle specific Google OAuth errors
-        if (errorMsg.includes('access_blocked') || errorMsg.includes('Authorization Error')) {
-          showErrorToast(
-            'Access Blocked',
-            'Please check Google Cloud Console configuration. Redirect URI may not be registered.'
-          );
-        } else if (errorMsg.includes('redirect_uri_mismatch')) {
-          showErrorToast(
-            'Configuration Error',
-            'Redirect URI mismatch. Check Google Cloud Console settings.'
-          );
-        } else {
-          showErrorToast('Google Sign-In Failed', errorMsg || 'Please try again');
-        }
-      } else if (googleResponse?.type === 'dismiss') {
-        // User dismissed the sign-in modal - no error needed
-        console.log('[GoogleAuth] User dismissed sign-in');
-      }
-    };
-
-    handleGoogleResponse();
-  }, [googleResponse]);
-
+  // Handle Google Sign-in using Supabase OAuth
   const handleGoogleSignIn = async () => {
-    if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Add EXPO_PUBLIC_GOOGLE_CLIENT_ID to your .env file');
-      console.log('[GoogleAuth] Client ID not configured');
-      console.log('[GoogleAuth] Redirect URI would be:', redirectUri);
-      return;
-    }
-
-    console.log('[GoogleAuth] Starting sign-in with redirect URI:', redirectUri);
-
+    setIsGoogleLoading(true);
     try {
-      const result = await googlePromptAsync();
-      console.log('[GoogleAuth] Prompt result:', result?.type);
+      console.log('[GoogleSignIn] Starting Supabase Google OAuth...');
+
+      const result = await signInWithGoogle();
+
+      if (!result) {
+        // User cancelled
+        console.log('[GoogleSignIn] User cancelled sign-in');
+        return;
+      }
+
+      const { user, session } = result;
+
+      if (!user) {
+        showErrorToast('Sign-In Failed', 'Could not sign in with Google');
+        return;
+      }
+
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
+      // Wait for DB trigger to create user records
+      await waitForUserRecords(user.id);
+
+      // Fetch workspace and profile to determine navigation
+      const [workspace, profile] = await Promise.all([
+        getWorkspaceForUser(user.id),
+        getUserProfile(user.id),
+      ]);
+
+      // Determine where to navigate
+      if (!workspace) {
+        showSuccessToast('Welcome!', 'Let\'s set up your vault');
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName: user.user_metadata?.name || '' },
+        });
+      } else if (!profile?.onboarding_completed) {
+        dispatch(setWorkspace(workspace));
+        showSuccessToast('Welcome Back', 'Continue setting up your vault');
+        router.replace({
+          pathname: '/(auth)/family-invite',
+          params: {
+            workspaceName: workspace.name,
+            workspaceId: workspace.id,
+          },
+        });
+      } else {
+        dispatch(setWorkspace(workspace));
+        showSuccessToast('Welcome Back', 'Signed in with Google');
+        router.replace('/(tabs)');
+      }
     } catch (err: any) {
-      console.error('[GoogleAuth] Prompt error:', err);
-      showErrorToast('Error', err.message || 'Could not start Google Sign-In');
+      console.error('[GoogleSignIn] Error:', err);
+      showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -365,8 +296,8 @@ export default function SignInScreen() {
           {/* Google Sign In */}
           <Pressable
             onPress={handleGoogleSignIn}
-            style={[styles.googleButton, (isGoogleLoading || !googleRequest) && styles.googleButtonDisabled]}
-            disabled={isGoogleLoading || !googleRequest}
+            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]}
+            disabled={isGoogleLoading}
           >
             {isGoogleLoading ? (
               <ActivityIndicator size="small" color="#1a1a1a" />
