@@ -75,8 +75,8 @@ export default function Index() {
         dispatch(setLoading(false));
 
         if (!workspace) {
-          console.log('[Index] No workspace, going to setup');
-          router.replace('/(auth)/workspace-setup');
+          console.log('[Index] No workspace, going to profile setup');
+          router.replace('/(auth)/profile-setup');
         } else if (!profile?.onboarding_completed) {
           console.log('[Index] Onboarding incomplete, going to family-invite');
           router.replace({

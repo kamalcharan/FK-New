@@ -181,13 +181,21 @@ export default function DashboardScreen() {
               </View>
             </Pressable>
 
-            {/* Tip Card */}
-            <View style={styles.tipCard}>
-              <Ionicons name="bulb" size={20} color="#fbbf24" />
-              <Text style={styles.tipText}>
-                <Text style={styles.tipBold}>Tip: </Text>
-                Enable Demo Mode in Settings to see how FamilyKnows works with sample data.
+            {/* Demo Mode Card - Prominent */}
+            <View style={styles.demoCard}>
+              <View style={styles.demoCardIcon}>
+                <Text style={styles.demoCardEmoji}>✨</Text>
+              </View>
+              <Text style={styles.demoCardTitle}>See how it works</Text>
+              <Text style={styles.demoCardSubtitle}>
+                Enable demo mode to explore FamilyKnows with sample loans, policies, and renewals
               </Text>
+              <Pressable
+                style={styles.demoCardButton}
+                onPress={() => router.push('/(tabs)/settings')}
+              >
+                <Text style={styles.demoCardButtonText}>Enable Demo Mode</Text>
+              </Pressable>
             </View>
           </View>
         ) : (
@@ -477,23 +485,50 @@ const styles = StyleSheet.create({
   emptyPillarAction: {
     padding: 4,
   },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    borderRadius: BorderRadius.lg,
-    padding: 14,
-    marginTop: 8,
+  // Demo Mode Card - Prominent
+  demoCard: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderRadius: BorderRadius['2xl'],
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 16,
   },
-  tipText: {
-    flex: 1,
+  demoCardIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  demoCardEmoji: {
+    fontSize: 28,
+  },
+  demoCardTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  demoCardSubtitle: {
     ...Typography.bodySm,
     color: Colors.textSecondary,
-    lineHeight: 18,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
-  tipBold: {
-    fontWeight: '600',
+  demoCardButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: BorderRadius.lg,
+  },
+  demoCardButtonText: {
+    ...Typography.button,
     color: Colors.text,
   },
 

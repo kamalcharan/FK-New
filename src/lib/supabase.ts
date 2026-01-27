@@ -606,6 +606,29 @@ export const getUserProfile = async (userId: string) => {
   return data;
 };
 
+// Update user profile
+export const updateUserProfile = async (
+  userId: string,
+  updates: {
+    full_name?: string;
+    phone?: string;
+    country_code?: string;
+    avatar_url?: string;
+  }
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .update(updates)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 // Check if fk_users record exists (needed for foreign key constraints)
 export const checkFkUserExists = async (userId: string): Promise<boolean> => {
   if (!supabase) return false;

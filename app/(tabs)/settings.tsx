@@ -56,6 +56,10 @@ export default function SettingsScreen() {
     }
   }, [currentWorkspace?.id, user?.id, demoEnabled, demoLoading]);
 
+  const handleViewProfile = () => {
+    router.push('/profile');
+  };
+
   const handleViewMembers = () => {
     router.push({
       pathname: '/family-members',
@@ -94,6 +98,15 @@ export default function SettingsScreen() {
         <Text style={styles.subtitle}>MANAGE YOUR LEGACY</Text>
 
         <View style={styles.section}>
+          <Pressable style={styles.settingItem} onPress={handleViewProfile}>
+            <Text style={styles.settingIcon}>👤</Text>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>My Profile</Text>
+              <Text style={styles.settingDescription}>{user?.email || 'View and edit your profile'}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+
           <Pressable style={styles.settingItem} onPress={handleViewMembers}>
             <Text style={styles.settingIcon}>👥</Text>
             <View style={styles.settingText}>

@@ -161,12 +161,12 @@ export default function SignInScreen() {
       ]);
 
       if (!workspace) {
-        // New user - go to workspace setup
+        // New user - go to profile setup first
         const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
-        showSuccessToast('Welcome!', 'Let\'s set up your vault');
+        showSuccessToast('Welcome!', 'Let\'s complete your profile');
         setIsGoogleLoading(false);
         router.replace({
-          pathname: '/(auth)/workspace-setup',
+          pathname: '/(auth)/profile-setup',
           params: { userName },
         });
       } else if (!profile?.onboarding_completed) {

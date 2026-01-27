@@ -252,12 +252,12 @@ export default function SignUpScreen() {
           });
         }
       } else {
-        // New user - go to workspace setup
+        // New user - go to profile setup first
         const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
         showSuccessToast('Account Created!', 'Welcome to FamilyKnows');
         setIsGoogleLoading(false);
         router.replace({
-          pathname: '/(auth)/workspace-setup',
+          pathname: '/(auth)/profile-setup',
           params: { userName },
         });
       }
