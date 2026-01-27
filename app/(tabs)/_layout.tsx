@@ -97,11 +97,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingTop: 8,
+    paddingTop: 16,
   },
   activeIndicator: {
     position: 'absolute',
-    top: 0,
+    top: 6,
     width: 4,
     height: 4,
     borderRadius: 2,
