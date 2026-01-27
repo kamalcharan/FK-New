@@ -35,10 +35,21 @@ export default function ProfileSetupScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const isPhoneValid = phone.length >= 10;
-  const isFormValid = fullName.trim().length >= 2 && isPhoneValid;
+  const isNameValid = fullName.trim().length >= 2;
+  const isFormValid = isNameValid && isPhoneValid;
 
   const handleContinue = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid) {
+      if (!isNameValid) {
+        showErrorToast('Name Required', 'Please enter your full name');
+        return;
+      }
+      if (!isPhoneValid) {
+        showErrorToast('Mobile Required', 'Please enter a valid mobile number');
+        return;
+      }
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -59,7 +70,7 @@ export default function ProfileSetupScreen() {
           full_name: fullName.trim(),
         }));
 
-        showSuccessToast('Profile Updated', 'Your profile has been saved');
+        showSuccessToast('Profile Saved', 'Your profile has been updated');
       }
 
       // Navigate to workspace setup
@@ -75,13 +86,6 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const handleSkip = () => {
-    // Navigate to workspace setup without saving phone
-    router.replace({
-      pathname: '/(auth)/workspace-setup',
-      params: { userName: fullName.trim() || userName || '' },
-    });
-  };
 
   const renderCountryItem = ({ item }: { item: CountryCode }) => (
     <Pressable
@@ -114,7 +118,7 @@ export default function ProfileSetupScreen() {
             </View>
             <Text style={styles.title}>Complete your profile</Text>
             <Text style={styles.subtitle}>
-              Help your family members recognize you
+              This helps family members recognize you and enables loan verifications
             </Text>
           </View>
 
@@ -122,7 +126,7 @@ export default function ProfileSetupScreen() {
           <View style={styles.form}>
             {/* Full Name */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>FULL NAME</Text>
+              <Text style={styles.label}>FULL NAME <Text style={styles.required}>*</Text></Text>
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}
@@ -130,13 +134,16 @@ export default function ProfileSetupScreen() {
                 placeholderTextColor={Colors.textPlaceholder}
                 autoCapitalize="words"
                 autoComplete="name"
-                style={styles.input}
+                style={[styles.input, !isNameValid && fullName.length > 0 && styles.inputError]}
               />
+              {!isNameValid && fullName.length > 0 && (
+                <Text style={styles.errorText}>Name must be at least 2 characters</Text>
+              )}
             </View>
 
             {/* Mobile Number */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>MOBILE NUMBER</Text>
+              <Text style={styles.label}>MOBILE NUMBER <Text style={styles.required}>*</Text></Text>
               <View style={styles.phoneContainer}>
                 {/* Country Code Selector */}
                 <Pressable
@@ -156,32 +163,32 @@ export default function ProfileSetupScreen() {
                   placeholderTextColor={Colors.textPlaceholder}
                   keyboardType="phone-pad"
                   maxLength={15}
-                  style={styles.phoneInput}
+                  style={[styles.phoneInput, !isPhoneValid && phone.length > 0 && styles.inputError]}
                 />
               </View>
-              <Text style={styles.helperText}>
-                We'll use this for loan verifications via WhatsApp
-              </Text>
+              {!isPhoneValid && phone.length > 0 ? (
+                <Text style={styles.errorText}>Please enter a valid 10-digit mobile number</Text>
+              ) : (
+                <Text style={styles.helperText}>
+                  Required for loan verifications via WhatsApp
+                </Text>
+              )}
             </View>
           </View>
 
-          {/* Buttons */}
-          <View style={styles.buttonContainer}>
-            <Button
-              title={isLoading ? 'Saving...' : 'Continue'}
-              onPress={handleContinue}
-              disabled={!isFormValid || isLoading}
-              loading={isLoading}
-              style={styles.continueButton}
-            />
-            <Pressable onPress={handleSkip} style={styles.skipButton}>
-              <Text style={styles.skipText}>Skip for now</Text>
-            </Pressable>
-          </View>
+          {/* Continue Button */}
+          <Button
+            title={isLoading ? 'Saving...' : 'Continue'}
+            onPress={handleContinue}
+            disabled={!isFormValid || isLoading}
+            loading={isLoading}
+            style={styles.continueButton}
+          />
 
           {/* Privacy Note */}
           <Text style={styles.privacyNote}>
-            Your phone number is only shared with family members you invite
+            Your phone number is only shared with family members you invite.{'\n'}
+            It's used for loan verifications via WhatsApp.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -263,6 +270,9 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     letterSpacing: 1.5,
   },
+  required: {
+    color: Colors.danger,
+  },
   input: {
     backgroundColor: Colors.inputBackground,
     borderRadius: BorderRadius.lg,
@@ -311,20 +321,16 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
   },
-  buttonContainer: {
-    gap: 16,
-    marginBottom: 24,
+  inputError: {
+    borderColor: Colors.danger,
+  },
+  errorText: {
+    ...Typography.bodySm,
+    color: Colors.danger,
+    marginTop: 4,
   },
   continueButton: {
-    // default styles from Button
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  skipText: {
-    ...Typography.body,
-    color: Colors.textMuted,
+    marginBottom: 16,
   },
   privacyNote: {
     ...Typography.bodySm,
