@@ -1,4 +1,3 @@
-// src/constants/theme.ts
 /**
  * FamilyKnows Design System
  * Extracted from HTML mockups for pixel-perfect implementation
@@ -83,6 +82,8 @@ export const BorderRadius = {
   full: 9999,
 } as const;
 
+// FIX: Removed textTransform from label - apply it directly in StyleSheet
+// textTransform can cause issues on Android when spread
 export const Typography = {
   // Headings (Fraunces)
   h1: {
@@ -118,7 +119,7 @@ export const Typography = {
     lineHeight: 18,
   },
 
-  // Labels - NOTE: textTransform should be applied directly in component styles
+  // Labels - FIX: removed textTransform, apply in component
   label: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10,

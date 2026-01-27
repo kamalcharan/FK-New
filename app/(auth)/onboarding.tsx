@@ -75,6 +75,8 @@ export default function OnboardingScreen() {
         horizontal={true}
         pagingEnabled={true}
         showsHorizontalScrollIndicator={false}
+        bounces={false}
+        scrollEventThrottle={16}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({

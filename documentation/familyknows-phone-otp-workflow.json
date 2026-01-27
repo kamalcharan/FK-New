@@ -1,0 +1,587 @@
+{
+  "name": "FamilyKnows Phone OTP Authentication",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "familyknows/otp/send",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-send-otp",
+      "name": "Send OTP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "fk-send-otp"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "familyknows/otp/verify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-verify-otp",
+      "name": "Verify OTP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 700],
+      "webhookId": "fk-verify-otp"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate phone number\nconst body = $input.first().json.body || $input.first().json;\nlet phone = body.phone || body.mobile || '';\n\n// Clean phone number\nphone = phone.replace(/\\D/g, '');\n\n// Validate\nif (!phone || phone.length < 10) {\n  return {\n    error: true,\n    message: 'Invalid phone number'\n  };\n}\n\n// Add country code if not present (India: 91)\nif (phone.length === 10) {\n  phone = '91' + phone;\n}\n\n// Generate 6-digit OTP\nconst otp = Math.floor(100000 + Math.random() * 900000).toString();\n\n// Create SHA256 hash of OTP\nconst crypto = require('crypto');\nconst otpHash = crypto.createHash('sha256').update(otp).digest('hex');\n\n// OTP expires in 5 minutes\nconst expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();\n\nreturn {\n  phone,\n  otp,\n  otpHash,\n  expiresAt,\n  error: false\n};"
+      },
+      "id": "generate-otp",
+      "name": "Generate OTP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-error",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-validation",
+      "name": "Valid Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"{{ $json.message }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-invalid-phone",
+      "name": "Invalid Phone Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 200]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "otp_verifications",
+        "conflictType": "columnsMatch",
+        "conflictColumns": "phone",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "phone",
+              "fieldValue": "={{ $json.phone }}"
+            },
+            {
+              "fieldName": "otp_hash",
+              "fieldValue": "={{ $json.otpHash }}"
+            },
+            {
+              "fieldName": "expires_at",
+              "fieldValue": "={{ $json.expiresAt }}"
+            },
+            {
+              "fieldName": "attempts",
+              "fieldValue": "=0"
+            },
+            {
+              "fieldName": "verified_at",
+              "fieldValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-otp",
+      "name": "Store OTP in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [950, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "familyknows-supabase",
+          "name": "FamilyKnows Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://control.msg91.com/api/v5/otp",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authkey",
+              "value": "473091Ajj9po1JhFB56901978eP1"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"YOUR_OTP_TEMPLATE_ID\",\n  \"mobile\": \"{{ $('Generate OTP').item.json.phone }}\",\n  \"otp\": \"{{ $('Generate OTP').item.json.otp }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-otp-msg91",
+      "name": "Send OTP via MSG91",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-msg91-success",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-msg91-response",
+      "name": "OTP Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"OTP sent successfully\",\n  \"phone\": \"{{ $('Generate OTP').item.json.phone }}\",\n  \"expiresIn\": 300\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-otp-sent",
+      "name": "OTP Sent Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Failed to send OTP. Please try again.\",\n  \"error\": \"{{ $json.message || 'SMS service error' }}\"\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "respond-otp-failed",
+      "name": "OTP Failed Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1700, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract verification data\nconst body = $input.first().json.body || $input.first().json;\nlet phone = body.phone || body.mobile || '';\nconst otp = body.otp || '';\n\n// Clean phone\nphone = phone.replace(/\\D/g, '');\n\n// Add country code if not present\nif (phone.length === 10) {\n  phone = '91' + phone;\n}\n\n// Validate\nif (!phone || phone.length < 10) {\n  return { error: true, message: 'Invalid phone number' };\n}\n\nif (!otp || otp.length !== 6) {\n  return { error: true, message: 'Invalid OTP format' };\n}\n\n// Create hash for comparison\nconst crypto = require('crypto');\nconst otpHash = crypto.createHash('sha256').update(otp).digest('hex');\n\nreturn {\n  phone,\n  otp,\n  otpHash,\n  error: false\n};"
+      },
+      "id": "validate-verify-input",
+      "name": "Validate Verify Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-verify-error",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-verify-validation",
+      "name": "Valid Input?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"{{ $json.message }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-invalid-verify-input",
+      "name": "Invalid Input Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 600]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "otp_verifications",
+        "returnAll": false,
+        "limit": 1,
+        "filterType": "string",
+        "filterString": "=phone=eq.{{ $json.phone }},verified_at=is.null,attempts=lt.5",
+        "options": {}
+      },
+      "id": "fetch-stored-otp",
+      "name": "Fetch Stored OTP",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [950, 800],
+      "credentials": {
+        "supabaseApi": {
+          "id": "familyknows-supabase",
+          "name": "FamilyKnows Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Verify Input').item.json;\nconst results = $input.all();\nconst dbResult = results.length > 0 ? results[0].json : null;\n\n// No OTP record found\nif (!dbResult || !dbResult.id) {\n  return {\n    valid: false,\n    message: 'No OTP request found. Please request a new OTP.',\n    code: 'NOT_FOUND'\n  };\n}\n\n// Check if expired\nconst expiresAt = new Date(dbResult.expires_at);\nif (expiresAt < new Date()) {\n  return {\n    valid: false,\n    message: 'OTP has expired. Please request a new OTP.',\n    code: 'EXPIRED',\n    recordId: dbResult.id\n  };\n}\n\n// Check attempts\nif (dbResult.attempts >= 5) {\n  return {\n    valid: false,\n    message: 'Too many failed attempts. Please request a new OTP.',\n    code: 'MAX_ATTEMPTS',\n    recordId: dbResult.id\n  };\n}\n\n// Verify OTP hash\nif (dbResult.otp_hash !== input.otpHash) {\n  return {\n    valid: false,\n    message: 'Invalid OTP. Please try again.',\n    code: 'INVALID',\n    recordId: dbResult.id,\n    attempts: dbResult.attempts + 1,\n    incrementAttempts: true\n  };\n}\n\n// OTP is valid!\nreturn {\n  valid: true,\n  message: 'OTP verified successfully',\n  code: 'SUCCESS',\n  recordId: dbResult.id,\n  phone: input.phone\n};"
+      },
+      "id": "verify-otp-logic",
+      "name": "Verify OTP Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-otp-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-otp-valid",
+      "name": "OTP Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 800]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "otp_verifications",
+        "filterType": "string",
+        "filterString": "=id=eq.{{ $json.recordId }}",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "verified_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mark-verified",
+      "name": "Mark OTP Verified",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1700, 700],
+      "credentials": {
+        "supabaseApi": {
+          "id": "familyknows-supabase",
+          "name": "FamilyKnows Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Verify OTP Logic').item.json;\nconst crypto = require('crypto');\n\n// Generate session token\nconst token = crypto.randomBytes(32).toString('hex');\nconst expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days\n\nreturn {\n  phone: input.phone,\n  token,\n  expiresAt\n};"
+      },
+      "id": "generate-session",
+      "name": "Generate Session Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1950, 700]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "user_sessions",
+        "conflictType": "columnsMatch",
+        "conflictColumns": "phone",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "phone",
+              "fieldValue": "={{ $json.phone }}"
+            },
+            {
+              "fieldName": "token",
+              "fieldValue": "={{ $json.token }}"
+            },
+            {
+              "fieldName": "expires_at",
+              "fieldValue": "={{ $json.expiresAt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-session",
+      "name": "Create/Update Session",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2200, 700],
+      "credentials": {
+        "supabaseApi": {
+          "id": "familyknows-supabase",
+          "name": "FamilyKnows Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"OTP verified successfully\",\n  \"token\": \"{{ $('Generate Session Token').item.json.token }}\",\n  \"expiresAt\": \"{{ $('Generate Session Token').item.json.expiresAt }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-verified",
+      "name": "Verified Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2450, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-increment",
+              "leftValue": "={{ $json.incrementAttempts }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-increment",
+      "name": "Increment Attempts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1700, 900]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "otp_verifications",
+        "filterType": "string",
+        "filterString": "=id=eq.{{ $json.recordId }}",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "attempts",
+              "fieldValue": "={{ $json.attempts }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "increment-attempts",
+      "name": "Increment Attempts",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1950, 850],
+      "credentials": {
+        "supabaseApi": {
+          "id": "familyknows-supabase",
+          "name": "FamilyKnows Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"{{ $('Verify OTP Logic').item.json.message }}\",\n  \"code\": \"{{ $('Verify OTP Logic').item.json.code }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-invalid-otp",
+      "name": "Invalid OTP Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2200, 850]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"{{ $('Verify OTP Logic').item.json.message }}\",\n  \"code\": \"{{ $('Verify OTP Logic').item.json.code }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-invalid-otp-no-increment",
+      "name": "Invalid OTP (No Increment)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1950, 1000]
+    }
+  ],
+  "connections": {
+    "Send OTP Webhook": {
+      "main": [[{ "node": "Generate OTP", "type": "main", "index": 0 }]]
+    },
+    "Generate OTP": {
+      "main": [[{ "node": "Valid Phone?", "type": "main", "index": 0 }]]
+    },
+    "Valid Phone?": {
+      "main": [
+        [{ "node": "Invalid Phone Response", "type": "main", "index": 0 }],
+        [{ "node": "Store OTP in Supabase", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store OTP in Supabase": {
+      "main": [[{ "node": "Send OTP via MSG91", "type": "main", "index": 0 }]]
+    },
+    "Send OTP via MSG91": {
+      "main": [[{ "node": "OTP Sent?", "type": "main", "index": 0 }]]
+    },
+    "OTP Sent?": {
+      "main": [
+        [{ "node": "OTP Sent Response", "type": "main", "index": 0 }],
+        [{ "node": "OTP Failed Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Verify OTP Webhook": {
+      "main": [[{ "node": "Validate Verify Input", "type": "main", "index": 0 }]]
+    },
+    "Validate Verify Input": {
+      "main": [[{ "node": "Valid Input?", "type": "main", "index": 0 }]]
+    },
+    "Valid Input?": {
+      "main": [
+        [{ "node": "Invalid Input Response", "type": "main", "index": 0 }],
+        [{ "node": "Fetch Stored OTP", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Stored OTP": {
+      "main": [[{ "node": "Verify OTP Logic", "type": "main", "index": 0 }]]
+    },
+    "Verify OTP Logic": {
+      "main": [[{ "node": "OTP Valid?", "type": "main", "index": 0 }]]
+    },
+    "OTP Valid?": {
+      "main": [
+        [{ "node": "Mark OTP Verified", "type": "main", "index": 0 }],
+        [{ "node": "Increment Attempts?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark OTP Verified": {
+      "main": [[{ "node": "Generate Session Token", "type": "main", "index": 0 }]]
+    },
+    "Generate Session Token": {
+      "main": [[{ "node": "Create/Update Session", "type": "main", "index": 0 }]]
+    },
+    "Create/Update Session": {
+      "main": [[{ "node": "Verified Response", "type": "main", "index": 0 }]]
+    },
+    "Increment Attempts?": {
+      "main": [
+        [{ "node": "Increment Attempts", "type": "main", "index": 0 }],
+        [{ "node": "Invalid OTP (No Increment)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Increment Attempts": {
+      "main": [[{ "node": "Invalid OTP Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "FamilyKnows" },
+    { "name": "Authentication" },
+    { "name": "OTP" }
+  ],
+  "triggerCount": 2
+}

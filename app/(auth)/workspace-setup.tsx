@@ -163,6 +163,7 @@ export default function WorkspaceSetupScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.form}>
+<<<<<<< HEAD
         {showJoinForm ? (
           <>
             {/* Invite Code Input */}
@@ -195,6 +196,34 @@ export default function WorkspaceSetupScreen() {
               disabled={!inviteCode.trim() || isLoading}
               loading={isLoading}
             />
+=======
+        {/* Vault Name Input */}
+        <View>
+          <Text style={styles.label}>VAULT NAME</Text>
+          <TextInput
+            style={[
+              styles.input,
+              isFocused ? styles.inputFocused : null,
+            ]}
+            placeholder="e.g. The Sharma Family"
+            placeholderTextColor={Colors.textPlaceholder}
+            value={vaultName}
+            onChangeText={setVaultName}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+        </View>
+
+        {/* Create Button */}
+        <Button
+          title="Create Workspace"
+          variant="primary"
+          onPress={handleCreateWorkspace}
+          disabled={vaultName.trim().length === 0}
+        />
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
 
             {/* Back to Create */}
             <Button
@@ -276,7 +305,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   subtitle: {
-    ...Typography.body,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
     color: Colors.textSecondary,
     marginBottom: Spacing.lg,
   },
@@ -293,10 +324,13 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
   },
   label: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
     marginBottom: Spacing.sm,
     marginLeft: 4,
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: Colors.inputBackground,
@@ -323,7 +357,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBorder,
   },
   dividerText: {
-    ...Typography.bodySm,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 2,

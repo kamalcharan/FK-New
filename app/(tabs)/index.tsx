@@ -96,12 +96,19 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+<<<<<<< HEAD
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
+=======
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
       >
         {/* Header */}
         <View style={styles.header}>
@@ -129,6 +136,7 @@ export default function DashboardScreen() {
             {/* Empty Pillar Cards */}
             <Text style={styles.sectionTitle}>GET STARTED</Text>
 
+<<<<<<< HEAD
             {/* Loan Ledger Empty */}
             <Pressable style={styles.emptyPillarCard} onPress={() => router.push('/(tabs)/loans')}>
               <View style={styles.emptyPillarIcon}>
@@ -188,6 +196,18 @@ export default function DashboardScreen() {
                 Enable Demo Mode in Settings to see how FamilyKnows works with sample data.
               </Text>
             </View>
+=======
+        {/* Emergency Access */}
+        <Text style={styles.sectionTitle}>FAMILY EMERGENCY ACCESS</Text>
+        <ScrollView 
+          horizontal={true} 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.emergencyScroll}
+        >
+          <View style={styles.emergencyCard}>
+            <Text style={styles.emergencyIcon}>🚑</Text>
+            <Text style={styles.emergencyLabel}>Health</Text>
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
           </View>
         ) : (
           /* Data State - Show when there's data */
@@ -346,6 +366,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 8,
   },
+<<<<<<< HEAD
   greeting: {
     ...Typography.bodySm,
     color: Colors.textMuted,
@@ -353,12 +374,34 @@ const styles = StyleSheet.create({
   workspaceName: {
     ...Typography.h2,
     color: Colors.text,
+=======
+  title: {
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 24,
+    lineHeight: 32,
+    color: Colors.text,
+  },
+  status: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Colors.textMuted,
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     marginTop: 4,
+    textTransform: 'uppercase',
   },
   notificationButton: {
+<<<<<<< HEAD
     ...GlassStyle,
     width: 44,
     height: 44,
+=======
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    width: 40,
+    height: 40,
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -498,7 +541,9 @@ const styles = StyleSheet.create({
 
   // Data State
   alertCard: {
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     borderRadius: BorderRadius['3xl'],
     padding: 24,
     marginBottom: 24,
@@ -525,19 +570,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.danger,
   },
   alertLabel: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.warning,
+    textTransform: 'uppercase',
   },
   alertLabelRed: {
     color: Colors.danger,
   },
   alertTitle: {
-    ...Typography.h3,
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 20,
+    lineHeight: 28,
     color: Colors.text,
     marginBottom: 4,
   },
   alertSubtitle: {
-    ...Typography.bodySm,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
     color: Colors.textSecondary,
     marginBottom: 20,
   },
@@ -553,19 +605,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   renewButtonText: {
-    ...Typography.button,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
     color: '#000',
   },
+<<<<<<< HEAD
   moreAlertsButton: {
     ...GlassStyle,
+=======
+  snoozeButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
   },
+<<<<<<< HEAD
   moreAlertsText: {
     ...Typography.bodySm,
     color: Colors.textMuted,
+=======
+  snoozeButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.text,
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -574,16 +643,24 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    ...GlassStyle,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     borderRadius: BorderRadius['2xl'],
     padding: 18,
     minHeight: 140,
     justifyContent: 'space-between',
   },
   summaryLabel: {
-    ...Typography.label,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: Colors.textMuted,
+<<<<<<< HEAD
     fontSize: 9,
+=======
+    textTransform: 'uppercase',
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   summaryContent: {
     gap: 2,
@@ -594,6 +671,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   summaryStatus: {
+<<<<<<< HEAD
     ...Typography.label,
     color: Colors.textSecondary,
     fontSize: 9,
@@ -611,6 +689,29 @@ const styles = StyleSheet.create({
     fontSize: 9,
     marginTop: 4,
     textTransform: 'none',
+=======
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Colors.success,
+    textTransform: 'uppercase',
+  },
+  summaryStatusMuted: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  sectionTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Colors.textMuted,
+    marginBottom: 16,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   renewalsCard: {
     ...GlassStyle,
@@ -643,6 +744,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -24,
     paddingHorizontal: 24,
   },
+<<<<<<< HEAD
   quickAction: {
     alignItems: 'center',
     marginRight: 16,
@@ -651,6 +753,14 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 56,
     height: 56,
+=======
+  emergencyCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    width: 96,
+    height: 96,
+>>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',

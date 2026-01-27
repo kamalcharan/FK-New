@@ -1,4 +1,3 @@
-// src/components/ui/Button.tsx
 import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { Colors, Typography, BorderRadius } from '../../constants/theme';
 
@@ -25,6 +24,7 @@ export function Button({
   textStyle,
   icon,
 }: ButtonProps) {
+  // FIX: Use ternary with null instead of && which returns false
   const buttonStyles = [
     styles.base,
     styles[variant],
@@ -41,8 +41,9 @@ export function Button({
 
   return (
     <Pressable
+      // FIX: Use ternary with null in style function
       style={({ pressed }) => [
-        buttonStyles,
+        ...buttonStyles,
         pressed ? styles.pressed : null,
       ]}
       onPress={onPress}
