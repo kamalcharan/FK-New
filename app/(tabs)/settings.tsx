@@ -1,5 +1,5 @@
 // app/(tabs)/settings.tsx
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
@@ -8,6 +8,7 @@ import { useAppDispatch, useAppSelector } from '../../src/hooks/useStore';
 import { logout } from '../../src/store/slices/authSlice';
 import { clearWorkspace } from '../../src/store/slices/workspaceSlice';
 import { signOut, toggleDemoMode, isDemoModeEnabled, isSupabaseReady } from '../../src/lib/supabase';
+import { showSuccessToast, showErrorToast } from '../../src/components/ToastConfig';
 
 export default function SettingsScreen() {
   const dispatch = useAppDispatch();
@@ -41,16 +42,15 @@ export default function SettingsScreen() {
       const result = await toggleDemoMode(currentWorkspace.id, user.id, newValue);
       if (result.success) {
         setDemoEnabled(newValue);
-        Alert.alert(
+        showSuccessToast(
           newValue ? 'Demo Mode Enabled' : 'Demo Mode Disabled',
-          result.message,
-          [{ text: 'OK' }]
+          result.message
         );
       } else {
-        Alert.alert('Error', result.message);
+        showErrorToast('Error', result.message);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to toggle demo mode');
+      showErrorToast('Error', err.message || 'Failed to toggle demo mode');
     } finally {
       setDemoLoading(false);
     }

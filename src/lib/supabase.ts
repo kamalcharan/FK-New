@@ -727,3 +727,76 @@ export const getUpcomingAlerts = async (workspaceId: string): Promise<UpcomingAl
   // Sort by days left
   return alerts.sort((a, b) => a.daysLeft - b.daysLeft);
 };
+
+// ============================================
+// Loan Verification Functions
+// ============================================
+
+export interface LoanVerificationResult {
+  success: boolean;
+  verification_code: string | null;
+  shareable_message: string | null;
+  error_message: string | null;
+}
+
+export const createLoanVerification = async (
+  loanId: string,
+  userId: string
+): Promise<LoanVerificationResult> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('create_loan_verification', {
+    p_loan_id: loanId,
+    p_user_id: userId,
+  });
+
+  if (error) throw error;
+  return data?.[0] || { success: false, verification_code: null, shareable_message: null, error_message: 'Unknown error' };
+};
+
+export interface VerifyLoanResult {
+  success: boolean;
+  loan_type: string | null;
+  amount: number | null;
+  loan_date: string | null;
+  lender_name: string | null;
+  handshake_date: string | null;
+  error_message: string | null;
+}
+
+export const verifyLoanByCode = async (
+  code: string,
+  name: string,
+  phone: string
+): Promise<VerifyLoanResult> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('verify_loan_by_code', {
+    p_code: code,
+    p_name: name,
+    p_phone: phone,
+  });
+
+  if (error) throw error;
+  return data?.[0] || { success: false, loan_type: null, amount: null, loan_date: null, lender_name: null, handshake_date: null, error_message: 'Unknown error' };
+};
+
+export interface LoanVerificationDetails {
+  verification_status: string;
+  verification_code: string | null;
+  code_expires_at: string | null;
+  verified_by_name: string | null;
+  verified_by_phone: string | null;
+  verified_at: string | null;
+}
+
+export const getLoanVerificationDetails = async (loanId: string): Promise<LoanVerificationDetails | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('get_loan_verification_details', {
+    p_loan_id: loanId,
+  });
+
+  if (error) throw error;
+  return data?.[0] || null;
+};
