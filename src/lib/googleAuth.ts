@@ -2,6 +2,7 @@
 // Google OAuth and Drive integration for FamilyKnows
 
 import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -26,11 +27,7 @@ const GOOGLE_CLIENT_ID_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROI
 const EXPO_USERNAME = process.env.EXPO_PUBLIC_EXPO_USERNAME || 'kamalcharan';
 
 // Discovery document for Google OAuth
-const discovery = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
+const discovery = Google.discovery;
 
 // Scopes we need:
 // - openid, profile, email: Standard OAuth scopes for user info
@@ -48,27 +45,18 @@ console.log('[GoogleAuth] App ownership:', Constants.appOwnership, 'isExpoGo:', 
 
 // Get the appropriate redirect URI based on platform and environment
 export const getRedirectUri = () => {
-  // For Expo Go, we MUST use the Expo auth proxy because Google doesn't accept exp:// URIs
-  // The proxy URL must be registered in Google Cloud Console
-  const proxyUri = `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
-
-  // Always log both URIs for debugging
-  const nativeUri = AuthSession.makeRedirectUri({
+  // For Expo Go, use makeRedirectUri which handles the proxy automatically
+  // For standalone apps, use the custom scheme
+  const redirectUri = AuthSession.makeRedirectUri({
     scheme: 'familyknows',
     path: 'auth/callback',
+    // Note: Don't set useProxy here - it's handled in promptAsync
   });
 
-  console.log('[GoogleAuth] Native redirect URI:', nativeUri);
-  console.log('[GoogleAuth] Proxy redirect URI:', proxyUri);
-  console.log('[GoogleAuth] Using proxy:', isExpoGo);
+  console.log('[GoogleAuth] Generated redirect URI:', redirectUri);
+  console.log('[GoogleAuth] isExpoGo:', isExpoGo);
 
-  // For Expo Go, always use the proxy
-  if (isExpoGo) {
-    return proxyUri;
-  }
-
-  // For standalone/dev builds, use the custom scheme
-  return nativeUri;
+  return redirectUri;
 };
 
 // Get the redirect URI for setup reference
@@ -83,29 +71,39 @@ export const isGoogleAuthConfigured = () => {
 
 // Google Auth hook for use in components
 export const useGoogleAuth = () => {
-  const redirectUri = getRedirectUri();
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: SCOPES,
-      redirectUri,
-      responseType: AuthSession.ResponseType.Code,
-      usePKCE: true,
-      extraParams: {
-        access_type: 'offline', // Get refresh token
-        prompt: 'consent',      // Always show consent screen to get refresh token
-      },
+  // Use Expo's Google provider which handles Expo Go proxy automatically
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_CLIENT_ID,
+    iosClientId: GOOGLE_CLIENT_ID_IOS,
+    androidClientId: GOOGLE_CLIENT_ID_ANDROID,
+    scopes: SCOPES,
+    extraParams: {
+      access_type: 'offline', // Get refresh token
+      prompt: 'consent',      // Always show consent screen
     },
-    discovery
-  );
+  });
 
-  // For Expo Go, we need to use the proxy
+  // Get the redirect URI for logging/debugging
+  const redirectUri = request?.redirectUri || AuthSession.makeRedirectUri({
+    scheme: 'familyknows',
+    path: 'auth/callback',
+  });
+
+  console.log('[GoogleAuth] Hook initialized');
+  console.log('[GoogleAuth] Client ID:', GOOGLE_CLIENT_ID ? `${GOOGLE_CLIENT_ID.substring(0, 20)}...` : 'NOT SET');
+  console.log('[GoogleAuth] isExpoGo:', isExpoGo);
+
+  // Log the full auth URL for debugging
+  if (request) {
+    console.log('[GoogleAuth] Auth request ready');
+    console.log('[GoogleAuth] Request redirectUri:', request.redirectUri);
+    console.log('[GoogleAuth] Request codeVerifier exists:', !!request.codeVerifier);
+  }
+
+  // Wrapped promptAsync with logging
   const wrappedPromptAsync = async (options?: AuthSession.AuthRequestPromptOptions) => {
-    if (isExpoGo) {
-      // Use promptAsync with useProxy for Expo Go
-      return promptAsync({ useProxy: true, ...options });
-    }
+    console.log('[GoogleAuth] promptAsync called');
+    console.log('[GoogleAuth] Current redirectUri:', request?.redirectUri);
     return promptAsync(options);
   };
 
