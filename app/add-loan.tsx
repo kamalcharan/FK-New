@@ -47,6 +47,7 @@ export default function AddLoanScreen() {
   const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsPermission, setContactsPermission] = useState<string | null>(null);
+  const [contactSearch, setContactSearch] = useState('');
 
   // Load contacts when picker opens
   const loadContacts = async () => {
@@ -70,9 +71,19 @@ export default function AddLoanScreen() {
   };
 
   const handleOpenContactPicker = async () => {
+    setContactSearch('');
     await loadContacts();
     setShowContactPicker(true);
   };
+
+  // Filter contacts based on search
+  const filteredContacts = contacts.filter(contact => {
+    if (!contactSearch.trim()) return true;
+    const searchLower = contactSearch.toLowerCase();
+    const nameMatch = contact.name?.toLowerCase().includes(searchLower);
+    const phoneMatch = contact.phoneNumbers?.some(p => p.number?.includes(contactSearch));
+    return nameMatch || phoneMatch;
+  });
 
   const handleSelectContact = (contact: Contacts.Contact) => {
     if (contact.name) {
@@ -345,7 +356,7 @@ export default function AddLoanScreen() {
       {/* Contact Picker Modal */}
       <Modal visible={showContactPicker} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setShowContactPicker(false)}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>Select Contact</Text>
             {contactsLoading ? (
               <View style={styles.contactsLoading}>
@@ -357,22 +368,46 @@ export default function AddLoanScreen() {
                 <Text style={styles.contactsPermissionText}>Contact permission is required to pick from contacts.</Text>
               </View>
             ) : (
-              <FlatList
-                data={contacts}
-                keyExtractor={item => item.id || Math.random().toString()}
-                renderItem={({ item }) => (
-                  <Pressable style={styles.contactOption} onPress={() => handleSelectContact(item)}>
-                    <View style={styles.contactAvatar}>
-                      <Text style={styles.contactAvatarText}>{item.name?.charAt(0).toUpperCase() || '?'}</Text>
-                    </View>
-                    <View style={styles.contactDetails}>
-                      <Text style={styles.contactName}>{item.name || 'No name'}</Text>
-                      {item.phoneNumbers?.[0] && <Text style={styles.contactPhone}>{item.phoneNumbers[0].number}</Text>}
-                    </View>
-                  </Pressable>
-                )}
-                ListEmptyComponent={<Text style={styles.noContactsText}>No contacts found</Text>}
-              />
+              <>
+                {/* Search Input */}
+                <View style={styles.searchContainer}>
+                  <Text style={styles.searchIcon}>🔍</Text>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search by name or phone..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={contactSearch}
+                    onChangeText={setContactSearch}
+                    autoCorrect={false}
+                  />
+                  {contactSearch.length > 0 && (
+                    <Pressable onPress={() => setContactSearch('')} style={styles.searchClear}>
+                      <Text style={styles.searchClearText}>✕</Text>
+                    </Pressable>
+                  )}
+                </View>
+                <FlatList
+                  data={filteredContacts}
+                  keyExtractor={item => item.id || Math.random().toString()}
+                  renderItem={({ item }) => (
+                    <Pressable style={styles.contactOption} onPress={() => handleSelectContact(item)}>
+                      <View style={styles.contactAvatar}>
+                        <Text style={styles.contactAvatarText}>{item.name?.charAt(0).toUpperCase() || '?'}</Text>
+                      </View>
+                      <View style={styles.contactDetails}>
+                        <Text style={styles.contactName}>{item.name || 'No name'}</Text>
+                        {item.phoneNumbers?.[0] && <Text style={styles.contactPhone}>{item.phoneNumbers[0].number}</Text>}
+                      </View>
+                    </Pressable>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={styles.noContactsText}>
+                      {contactSearch ? 'No matching contacts' : 'No contacts found'}
+                    </Text>
+                  }
+                  keyboardShouldPersistTaps="handled"
+                />
+              </>
             )}
           </View>
         </Pressable>
@@ -448,6 +483,23 @@ const styles = StyleSheet.create({
   currencyOptionCode: { ...Typography.body, color: Colors.text, fontFamily: 'Inter_600SemiBold' },
   currencyOptionName: { ...Typography.bodySm, color: Colors.textMuted },
   currencyCheck: { fontSize: 18, color: Colors.primary },
+
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.inputBackground,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  searchIcon: { fontSize: 16, marginRight: 10 },
+  searchInput: { flex: 1, ...Typography.body, color: Colors.text, padding: 0 },
+  searchClear: { padding: 4 },
+  searchClearText: { fontSize: 14, color: Colors.textMuted },
 
   contactsLoading: { padding: 40, alignItems: 'center' },
   contactsLoadingText: { ...Typography.body, color: Colors.textMuted, marginTop: 16 },
