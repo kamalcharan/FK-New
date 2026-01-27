@@ -141,6 +141,15 @@ export default function SignInScreen() {
 
       console.log('[GoogleSignIn] Auth successful, user:', user.id);
 
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
       // Wait for DB trigger to create user records
       console.log('[GoogleSignIn] Waiting for user records...');
       await waitForUserRecords(user.id);
@@ -161,6 +170,8 @@ export default function SignInScreen() {
           params: { userName },
         });
       } else if (!profile?.onboarding_completed) {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
         showSuccessToast('Welcome Back!', 'Let\'s finish setup');
         setIsGoogleLoading(false);
         router.replace({
@@ -168,6 +179,8 @@ export default function SignInScreen() {
           params: { workspaceName: workspace.name, workspaceId: workspace.id },
         });
       } else {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
         showSuccessToast('Welcome Back!', 'Signed in with Google');
         setIsGoogleLoading(false);
         router.replace('/(tabs)');

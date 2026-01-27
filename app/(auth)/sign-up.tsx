@@ -19,7 +19,9 @@ import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constant
 import { Button } from '../../src/components/ui/Button';
 import { signUpWithEmail, isSupabaseReady, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists, getWorkspaceForUser, signInWithGoogle } from '../../src/lib/supabase';
 import { isGoogleAuthConfigured } from '../../src/lib/googleAuth';
+import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
+import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 // Helper to wait for user records to be created by DB trigger
 // The trigger creates fk_users and fk_user_profiles after auth.users is created
@@ -195,6 +197,15 @@ export default function SignUpScreen() {
 
       console.log('[GoogleSignUp] Auth successful, user:', user.id);
 
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
       // Wait for DB trigger to create user records
       console.log('[GoogleSignUp] Waiting for user records...');
       await waitForUserRecords(user.id);
@@ -205,6 +216,13 @@ export default function SignUpScreen() {
           console.log('[GoogleSignUp] Processing invite code...');
           const inviteResult = await acceptFamilyInvite(inviteCodeParam, user.id);
           if (inviteResult.success && inviteResult.workspace_id) {
+            // Store workspace in Redux
+            dispatch(setWorkspace({
+              id: inviteResult.workspace_id,
+              name: inviteResult.workspace_name || 'Family Vault',
+              owner_id: '',
+              created_at: new Date().toISOString(),
+            }));
             await updateOnboardingStatus(user.id, true);
             showSuccessToast('Welcome!', `You've joined ${inviteResult.workspace_name}`);
             setIsGoogleLoading(false);
@@ -220,6 +238,8 @@ export default function SignUpScreen() {
       const workspace = await getWorkspaceForUser(user.id);
 
       if (workspace) {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
         const profile = await getUserProfile(user.id);
         if (profile?.onboarding_completed) {
           showSuccessToast('Welcome Back!', 'Signed in with Google');
