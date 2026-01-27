@@ -3,6 +3,8 @@
 
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { supabase, isSupabaseReady } from './supabase';
 
 // Complete the auth session when the app redirects back
@@ -13,12 +15,15 @@ WebBrowser.maybeCompleteAuthSession();
 // 1. Create OAuth 2.0 Client ID (Web application)
 // 2. Add authorized redirect URIs:
 //    - For Expo Go: https://auth.expo.io/@your-username/familyknows
-//    - For standalone: your-scheme://
+//    - For standalone: familyknows://auth/callback
 // 3. Enable Google Drive API in the console
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_ID_IOS = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || GOOGLE_CLIENT_ID;
+
+// Expo username for auth proxy (update this to your Expo username)
+const EXPO_USERNAME = process.env.EXPO_PUBLIC_EXPO_USERNAME || 'kamalcharan';
 
 // Discovery document for Google OAuth
 const discovery = {
@@ -37,12 +42,19 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive.file', // Only access files created by the app
 ];
 
-// Get the appropriate redirect URI based on platform
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Get the appropriate redirect URI based on platform and environment
 export const getRedirectUri = () => {
-  // This generates the correct redirect URI for each environment:
-  // - Expo Go: https://auth.expo.io/@username/familyknows
-  // - Dev Build: familyknows://auth/callback
-  // - Standalone: familyknows://auth/callback
+  // For Expo Go, we MUST use the Expo auth proxy because Google doesn't accept exp:// URIs
+  if (isExpoGo) {
+    const proxyUri = `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
+    console.log('[GoogleAuth] Using Expo proxy redirect URI:', proxyUri);
+    return proxyUri;
+  }
+
+  // For standalone/dev builds, use the custom scheme
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: 'familyknows',
     path: 'auth/callback',
@@ -52,11 +64,9 @@ export const getRedirectUri = () => {
   return redirectUri;
 };
 
-// Get the redirect URI specifically for Expo Go (for logging/setup purposes)
-export const getExpoGoRedirectUri = () => {
-  // This is the format needed for Expo Go
-  // Replace YOUR_USERNAME with your Expo account username
-  return 'https://auth.expo.io/@YOUR_USERNAME/familyknows';
+// Get the redirect URI for setup reference
+export const getExpoProxyRedirectUri = () => {
+  return `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
 };
 
 // Check if Google auth is configured
@@ -82,6 +92,18 @@ export const useGoogleAuth = () => {
     },
     discovery
   );
+
+  // For Expo Go, we need to use the proxy
+  const wrappedPromptAsync = async (options?: AuthSession.AuthRequestPromptOptions) => {
+    if (isExpoGo) {
+      // Use promptAsync with useProxy for Expo Go
+      return promptAsync({ useProxy: true, ...options });
+    }
+    return promptAsync(options);
+  };
+
+  return { request, response, promptAsync: wrappedPromptAsync, redirectUri };
+};
 
   return { request, response, promptAsync, redirectUri };
 };
