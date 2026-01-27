@@ -130,7 +130,7 @@ export default function DashboardScreen() {
             <Text style={styles.sectionTitle}>GET STARTED</Text>
 
             {/* Loan Ledger Empty */}
-            <Pressable style={styles.emptyPillarCard} onPress={() => router.push('/ledger')}>
+            <Pressable style={styles.emptyPillarCard} onPress={() => router.push('/(tabs)/loans')}>
               <View style={styles.emptyPillarIcon}>
                 <Text style={styles.emptyPillarEmoji}>💰</Text>
               </View>
@@ -239,7 +239,7 @@ export default function DashboardScreen() {
 
             {/* Summary Cards */}
             <View style={styles.summaryGrid}>
-              <Pressable style={styles.summaryCard} onPress={() => router.push('/ledger')}>
+              <Pressable style={styles.summaryCard} onPress={() => router.push('/(tabs)/loans')}>
                 <Text style={styles.summaryLabel}>LOAN LEDGER</Text>
                 <View style={styles.summaryContent}>
                   <Text style={styles.summaryValue}>
