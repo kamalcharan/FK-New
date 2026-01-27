@@ -1,8 +1,8 @@
 // app/(tabs)/index.tsx
 import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../../src/constants/theme';
 import { useAppSelector } from '../../src/hooks/useStore';
@@ -56,9 +56,12 @@ export default function DashboardScreen() {
     }
   }, [currentWorkspace?.id, user?.id]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Reload data whenever screen comes into focus (e.g., after toggling demo mode)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

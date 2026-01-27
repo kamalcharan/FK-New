@@ -90,14 +90,6 @@ export default function AddScreen() {
           </View>
           <ChevronRight size={20} color={Colors.textMuted} />
         </Pressable>
-        <Pressable style={styles.quickAction}>
-          <Text style={styles.quickIcon}>👨‍👩‍👧‍👦</Text>
-          <View style={styles.quickTextArea}>
-            <Text style={styles.quickTitle}>Invite Family</Text>
-            <Text style={styles.quickSubtitle}>Share vault access with members</Text>
-          </View>
-          <ChevronRight size={20} color={Colors.textMuted} />
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
