@@ -206,13 +206,16 @@ export default function LoansScreen() {
                       </View>
                       <View style={[
                         styles.statusBadge,
-                        loan.verification_status === 'verified' ? styles.verifiedBadge : styles.pendingBadge
+                        loan.verification_status === 'verified' ? styles.verifiedBadge :
+                        loan.verification_status === 'historical' ? styles.historicalBadge : styles.pendingBadge
                       ]}>
                         <Text style={[
                           styles.statusText,
-                          loan.verification_status === 'verified' ? styles.verifiedText : styles.pendingText
+                          loan.verification_status === 'verified' ? styles.verifiedText :
+                          loan.verification_status === 'historical' ? styles.historicalText : styles.pendingText
                         ]}>
-                          {loan.verification_status === 'verified' ? '✓ Verified' : '⏳ Pending'}
+                          {loan.verification_status === 'verified' ? '✓ Verified' :
+                           loan.verification_status === 'historical' ? '📜 Historical' : '⏳ Pending'}
                         </Text>
                       </View>
                     </View>
@@ -246,13 +249,16 @@ export default function LoansScreen() {
                       </View>
                       <View style={[
                         styles.statusBadge,
-                        loan.verification_status === 'verified' ? styles.verifiedBadge : styles.pendingBadge
+                        loan.verification_status === 'verified' ? styles.verifiedBadge :
+                        loan.verification_status === 'historical' ? styles.historicalBadge : styles.pendingBadge
                       ]}>
                         <Text style={[
                           styles.statusText,
-                          loan.verification_status === 'verified' ? styles.verifiedText : styles.pendingText
+                          loan.verification_status === 'verified' ? styles.verifiedText :
+                          loan.verification_status === 'historical' ? styles.historicalText : styles.pendingText
                         ]}>
-                          {loan.verification_status === 'verified' ? '✓ Verified' : '⏳ Pending'}
+                          {loan.verification_status === 'verified' ? '✓ Verified' :
+                           loan.verification_status === 'historical' ? '📜 Historical' : '⏳ Pending'}
                         </Text>
                       </View>
                     </View>
@@ -397,9 +403,11 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full },
   verifiedBadge: { backgroundColor: Colors.successMuted },
   pendingBadge: { backgroundColor: Colors.pendingMuted },
+  historicalBadge: { backgroundColor: 'rgba(100, 116, 139, 0.2)' },
   statusText: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 },
   verifiedText: { color: Colors.success },
   pendingText: { color: Colors.pending },
+  historicalText: { color: '#64748b' },
   loanDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   loanAmount: { fontSize: 24, fontFamily: 'Inter_300Light', color: Colors.text },
   loanDate: { ...Typography.bodySm, color: Colors.textMuted, marginTop: 4 },
