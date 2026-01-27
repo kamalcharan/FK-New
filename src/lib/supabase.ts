@@ -2,6 +2,8 @@
 import 'react-native-url-polyfill/auto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 // Environment variables - replace with your Supabase project credentials
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -97,13 +99,127 @@ export const signInWithPassword = async (identifier: string, password: string) =
   return data;
 };
 
-export const signInWithGoogle = async () => {
+// Google Sign-in using Supabase OAuth
+// This uses Supabase as the OAuth intermediary, avoiding exp:// redirect issues
+export const signInWithGoogle = async (): Promise<{
+  user: any;
+  session: any;
+} | null> => {
   if (!supabase) {
     console.warn('Supabase not configured');
     return null;
   }
-  // This will be implemented with expo-auth-session
-  throw new Error('Google Sign-in not yet implemented');
+
+  try {
+    // Get the redirect URL that will come back to our app
+    // For Expo Go, this will be exp://... but Supabase handles the OAuth with Google
+    // Google only sees Supabase's URL, then Supabase redirects to our app
+    const redirectUrl = Linking.createURL('auth/callback');
+    console.log('[SupabaseGoogleAuth] Redirect URL:', redirectUrl);
+
+    // Start OAuth flow - this gets the authorization URL from Supabase
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true, // We'll handle the browser ourselves
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) {
+      console.error('[SupabaseGoogleAuth] OAuth error:', error);
+      throw error;
+    }
+
+    if (!data?.url) {
+      throw new Error('No OAuth URL returned from Supabase');
+    }
+
+    console.log('[SupabaseGoogleAuth] Opening auth URL...');
+
+    // Open browser for authentication
+    const result = await WebBrowser.openAuthSessionAsync(
+      data.url,
+      redirectUrl,
+      {
+        showInRecents: true,
+      }
+    );
+
+    console.log('[SupabaseGoogleAuth] Browser result type:', result.type);
+
+    if (result.type === 'success' && result.url) {
+      console.log('[SupabaseGoogleAuth] Success URL:', result.url);
+
+      // Extract the tokens/session from the URL
+      // Supabase returns access_token and refresh_token as URL fragments
+      const url = new URL(result.url);
+
+      // Check for hash fragments (Supabase returns tokens in hash)
+      const hashParams = new URLSearchParams(url.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      // Also check query params as fallback
+      const queryParams = new URLSearchParams(url.search);
+      const code = queryParams.get('code');
+      const errorParam = queryParams.get('error');
+      const errorDescription = queryParams.get('error_description');
+
+      if (errorParam) {
+        throw new Error(errorDescription || errorParam);
+      }
+
+      if (accessToken) {
+        // Set the session directly using the tokens
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        });
+
+        if (sessionError) {
+          console.error('[SupabaseGoogleAuth] Session error:', sessionError);
+          throw sessionError;
+        }
+
+        console.log('[SupabaseGoogleAuth] Session established successfully');
+        return {
+          user: sessionData.user,
+          session: sessionData.session,
+        };
+      } else if (code) {
+        // If we got a code, exchange it for session
+        const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (sessionError) {
+          console.error('[SupabaseGoogleAuth] Code exchange error:', sessionError);
+          throw sessionError;
+        }
+
+        console.log('[SupabaseGoogleAuth] Code exchanged successfully');
+        return {
+          user: sessionData.user,
+          session: sessionData.session,
+        };
+      } else {
+        console.error('[SupabaseGoogleAuth] No tokens or code in response');
+        throw new Error('No authentication data received');
+      }
+    } else if (result.type === 'cancel' || result.type === 'dismiss') {
+      console.log('[SupabaseGoogleAuth] User cancelled');
+      return null;
+    } else {
+      console.error('[SupabaseGoogleAuth] Unexpected result:', result);
+      throw new Error('Authentication failed');
+    }
+  } catch (err: any) {
+    console.error('[SupabaseGoogleAuth] Error:', err);
+    throw err;
+  }
 };
 
 export const signOut = async () => {
@@ -250,6 +366,19 @@ export const getLoans = async (workspaceId: string) => {
     .select('*')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};
+
+export const getLoanById = async (loanId: string) => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_loans')
+    .select('*')
+    .eq('id', loanId)
+    .single();
 
   if (error) throw error;
   return data;
@@ -474,6 +603,29 @@ export const getUserProfile = async (userId: string) => {
     .single();
 
   if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+// Update user profile
+export const updateUserProfile = async (
+  userId: string,
+  updates: {
+    full_name?: string;
+    phone?: string;
+    country_code?: string;
+    avatar_url?: string;
+  }
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .update(updates)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
   return data;
 };
 

@@ -3,6 +3,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../src/constants/theme';
 
 const STEPS = [
@@ -45,7 +46,7 @@ export default function LoanIntroScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <ArrowLeft size={24} color={Colors.text} />
           </Pressable>
           <Text style={styles.title}>How It Works</Text>
         </View>
@@ -137,7 +138,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: { fontSize: 20, color: Colors.text },
   title: { ...Typography.h2, color: Colors.text, flex: 1 },
 
   heroCard: {

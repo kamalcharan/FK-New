@@ -1,8 +1,8 @@
 // app/(tabs)/index.tsx
 import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../../src/constants/theme';
 import { useAppSelector } from '../../src/hooks/useStore';
@@ -56,9 +56,12 @@ export default function DashboardScreen() {
     }
   }, [currentWorkspace?.id, user?.id]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Reload data whenever screen comes into focus (e.g., after toggling demo mode)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -96,19 +99,13 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-<<<<<<< HEAD
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
-=======
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
       >
         {/* Header */}
         <View style={styles.header}>
@@ -136,7 +133,6 @@ export default function DashboardScreen() {
             {/* Empty Pillar Cards */}
             <Text style={styles.sectionTitle}>GET STARTED</Text>
 
-<<<<<<< HEAD
             {/* Loan Ledger Empty */}
             <Pressable style={styles.emptyPillarCard} onPress={() => router.push('/(tabs)/loans')}>
               <View style={styles.emptyPillarIcon}>
@@ -188,26 +184,22 @@ export default function DashboardScreen() {
               </View>
             </Pressable>
 
-            {/* Tip Card */}
-            <View style={styles.tipCard}>
-              <Ionicons name="bulb" size={20} color="#fbbf24" />
-              <Text style={styles.tipText}>
-                <Text style={styles.tipBold}>Tip: </Text>
-                Enable Demo Mode in Settings to see how FamilyKnows works with sample data.
+            {/* Demo Mode Card - Prominent */}
+            <View style={styles.demoCard}>
+              <View style={styles.demoCardIcon}>
+                <Text style={styles.demoCardEmoji}>✨</Text>
+              </View>
+              <Text style={styles.demoCardTitle}>See how it works</Text>
+              <Text style={styles.demoCardSubtitle}>
+                Enable demo mode to explore FamilyKnows with sample loans, policies, and renewals
               </Text>
+              <Pressable
+                style={styles.demoCardButton}
+                onPress={() => router.push('/(tabs)/settings')}
+              >
+                <Text style={styles.demoCardButtonText}>Enable Demo Mode</Text>
+              </Pressable>
             </View>
-=======
-        {/* Emergency Access */}
-        <Text style={styles.sectionTitle}>FAMILY EMERGENCY ACCESS</Text>
-        <ScrollView 
-          horizontal={true} 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.emergencyScroll}
-        >
-          <View style={styles.emergencyCard}>
-            <Text style={styles.emergencyIcon}>🚑</Text>
-            <Text style={styles.emergencyLabel}>Health</Text>
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
           </View>
         ) : (
           /* Data State - Show when there's data */
@@ -366,7 +358,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 8,
   },
-<<<<<<< HEAD
   greeting: {
     ...Typography.bodySm,
     color: Colors.textMuted,
@@ -374,34 +365,12 @@ const styles = StyleSheet.create({
   workspaceName: {
     ...Typography.h2,
     color: Colors.text,
-=======
-  title: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 24,
-    lineHeight: 32,
-    color: Colors.text,
-  },
-  status: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: Colors.textMuted,
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     marginTop: 4,
-    textTransform: 'uppercase',
   },
   notificationButton: {
-<<<<<<< HEAD
     ...GlassStyle,
     width: 44,
     height: 44,
-=======
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    width: 40,
-    height: 40,
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -519,23 +488,50 @@ const styles = StyleSheet.create({
   emptyPillarAction: {
     padding: 4,
   },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    borderRadius: BorderRadius.lg,
-    padding: 14,
-    marginTop: 8,
+  // Demo Mode Card - Prominent
+  demoCard: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderRadius: BorderRadius['2xl'],
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 16,
   },
-  tipText: {
-    flex: 1,
+  demoCardIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  demoCardEmoji: {
+    fontSize: 28,
+  },
+  demoCardTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  demoCardSubtitle: {
     ...Typography.bodySm,
     color: Colors.textSecondary,
-    lineHeight: 18,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
-  tipBold: {
-    fontWeight: '600',
+  demoCardButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: BorderRadius.lg,
+  },
+  demoCardButtonText: {
+    ...Typography.button,
     color: Colors.text,
   },
 
@@ -610,31 +606,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#000',
   },
-<<<<<<< HEAD
   moreAlertsButton: {
     ...GlassStyle,
-=======
-  snoozeButton: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
   },
-<<<<<<< HEAD
   moreAlertsText: {
     ...Typography.bodySm,
     color: Colors.textMuted,
-=======
-  snoozeButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.text,
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -653,14 +634,10 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
+    fontSize: 9,
     letterSpacing: 1.5,
     color: Colors.textMuted,
-<<<<<<< HEAD
-    fontSize: 9,
-=======
     textTransform: 'uppercase',
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   summaryContent: {
     gap: 2,
@@ -671,7 +648,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   summaryStatus: {
-<<<<<<< HEAD
     ...Typography.label,
     color: Colors.textSecondary,
     fontSize: 9,
@@ -689,29 +665,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     marginTop: 4,
     textTransform: 'none',
-=======
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: Colors.success,
-    textTransform: 'uppercase',
-  },
-  summaryStatusMuted: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  sectionTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: Colors.textMuted,
-    marginBottom: 16,
-    marginLeft: 4,
-    textTransform: 'uppercase',
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
   },
   renewalsCard: {
     ...GlassStyle,
@@ -744,7 +697,6 @@ const styles = StyleSheet.create({
     marginHorizontal: -24,
     paddingHorizontal: 24,
   },
-<<<<<<< HEAD
   quickAction: {
     alignItems: 'center',
     marginRight: 16,
@@ -753,14 +705,6 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 56,
     height: 56,
-=======
-  emergencyCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    width: 96,
-    height: 96,
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',

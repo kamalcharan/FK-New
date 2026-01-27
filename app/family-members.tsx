@@ -289,6 +289,16 @@ export default function FamilyMembersScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Invite Family Button - Fixed at bottom */}
+      {(members.length > 0 || pendingInvites.length > 0) && (
+        <View style={styles.floatingButtonContainer}>
+          <Pressable style={styles.floatingInviteButton} onPress={handleInviteMore}>
+            <Ionicons name="person-add" size={20} color={Colors.text} />
+            <Text style={styles.floatingInviteText}>Invite Family</Text>
+          </Pressable>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -468,6 +478,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomPadding: {
-    height: 40,
+    height: 100, // Extra padding for floating button
+  },
+  floatingButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.md,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  floatingInviteButton: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+  },
+  floatingInviteText: {
+    ...Typography.button,
+    color: Colors.text,
   },
 });

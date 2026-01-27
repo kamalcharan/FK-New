@@ -1,6 +1,8 @@
 // app/index.tsx
-import { useEffect, useState } from 'react';
-import { Redirect } from 'expo-router';
+// Entry point - handles initial routing based on auth state
+// Note: After Google OAuth, sign-in/sign-up screens handle navigation directly
+import { useEffect, useState, useRef } from 'react';
+import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAppSelector, useAppDispatch } from '../src/hooks/useStore';
 import { setLoading, setUser, setSession } from '../src/store/slices/authSlice';
@@ -10,73 +12,44 @@ import { Colors } from '../src/constants/theme';
 
 export default function Index() {
   const dispatch = useAppDispatch();
-  const { isLoading, isAuthenticated } = useAppSelector(state => state.auth);
-  const { currentWorkspace } = useAppSelector(state => state.workspace);
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const { isLoading } = useAppSelector(state => state.auth);
+  const [hasRouted, setHasRouted] = useState(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    // If Supabase is not configured, skip auth check
-    if (!isSupabaseReady() || !supabase) {
-      dispatch(setLoading(false));
-      return;
-    }
-
-    checkAuthState();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        dispatch(setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          full_name: session.user.user_metadata?.full_name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-          created_at: session.user.created_at,
-        }));
-        dispatch(setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          expires_at: session.expires_at || 0,
-          user: {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: session.user.user_metadata?.full_name,
-            avatar_url: session.user.user_metadata?.avatar_url,
-            created_at: session.user.created_at,
-          },
-        }));
-
-        // Check for workspace
-        const workspace = await getWorkspaceForUser(session.user.id);
-        if (workspace) {
-          dispatch(setWorkspace(workspace));
-        }
-
-        // Check onboarding status
-        const profile = await getUserProfile(session.user.id);
-        setOnboardingCompleted(profile?.onboarding_completed ?? false);
-      } else {
-        dispatch(setUser(null));
-        dispatch(setSession(null));
-        dispatch(setWorkspace(null));
-        setOnboardingCompleted(null);
-      }
-      dispatch(setLoading(false));
-    });
-
-    return () => subscription.unsubscribe();
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
-  const checkAuthState = async () => {
-    if (!supabase) {
+  useEffect(() => {
+    // If Supabase is not configured, go to onboarding (demo mode)
+    if (!isSupabaseReady() || !supabase) {
       dispatch(setLoading(false));
+      if (!hasRouted) {
+        setHasRouted(true);
+        router.replace('/(auth)/onboarding');
+      }
       return;
     }
 
+    checkAuthAndRoute();
+  }, []);
+
+  const checkAuthAndRoute = async () => {
+    if (!supabase || hasRouted) return;
+
     try {
+      console.log('[Index] Checking auth state...');
       const { data: { session } } = await supabase.auth.getSession();
 
+      if (!isMounted.current) return;
+
       if (session?.user) {
+        console.log('[Index] User authenticated:', session.user.id);
+
+        // Update Redux state
         dispatch(setUser({
           id: session.user.id,
           email: session.user.email || '',
@@ -85,57 +58,57 @@ export default function Index() {
           created_at: session.user.created_at,
         }));
 
-        // Check for workspace
-        const workspace = await getWorkspaceForUser(session.user.id);
+        // Check workspace and profile
+        const [workspace, profile] = await Promise.all([
+          getWorkspaceForUser(session.user.id),
+          getUserProfile(session.user.id),
+        ]);
+
+        if (!isMounted.current) return;
+
         if (workspace) {
           dispatch(setWorkspace(workspace));
         }
 
-        // Check onboarding status
-        const profile = await getUserProfile(session.user.id);
-        setOnboardingCompleted(profile?.onboarding_completed ?? false);
+        // Route based on state
+        setHasRouted(true);
+        dispatch(setLoading(false));
+
+        if (!workspace) {
+          console.log('[Index] No workspace, going to profile setup');
+          router.replace('/(auth)/profile-setup');
+        } else if (!profile?.onboarding_completed) {
+          console.log('[Index] Onboarding incomplete, going to family-invite');
+          router.replace({
+            pathname: '/(auth)/family-invite',
+            params: { workspaceName: workspace.name, workspaceId: workspace.id },
+          });
+        } else {
+          console.log('[Index] Fully onboarded, going to tabs');
+          router.replace('/(tabs)');
+        }
       } else {
-        setOnboardingCompleted(null);
+        console.log('[Index] No session, going to onboarding');
+        setHasRouted(true);
+        dispatch(setLoading(false));
+        router.replace('/(auth)/onboarding');
       }
     } catch (error) {
-      console.error('Auth check error:', error);
-    } finally {
-      dispatch(setLoading(false));
+      console.error('[Index] Auth check error:', error);
+      if (isMounted.current) {
+        setHasRouted(true);
+        dispatch(setLoading(false));
+        router.replace('/(auth)/onboarding');
+      }
     }
   };
 
-  // Show loading spinner while checking auth
-  if (isLoading || (isAuthenticated && onboardingCompleted === null)) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  // Not authenticated - go to auth flow
-  if (!isAuthenticated) {
-    return <Redirect href="/(auth)/onboarding" />;
-  }
-
-  // Authenticated but no workspace - go to workspace setup
-  if (!currentWorkspace) {
-    return <Redirect href="/(auth)/workspace-setup" />;
-  }
-
-  // Authenticated with workspace but onboarding not completed - go to family invite
-  if (!onboardingCompleted) {
-    return <Redirect href={{
-      pathname: "/(auth)/family-invite",
-      params: {
-        workspaceName: currentWorkspace.name,
-        workspaceId: currentWorkspace.id,
-      }
-    }} />;
-  }
-
-  // Fully authenticated with workspace and onboarding complete - go to main app
-  return <Redirect href="/(tabs)" />;
+  // Always show loading spinner on index - routing happens in useEffect
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

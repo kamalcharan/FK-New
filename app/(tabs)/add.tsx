@@ -2,6 +2,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';
 
 const ADD_OPTIONS = [
@@ -87,15 +88,7 @@ export default function AddScreen() {
             <Text style={styles.quickTitle}>Scan Document</Text>
             <Text style={styles.quickSubtitle}>Auto-extract details from photo</Text>
           </View>
-          <Text style={styles.arrow}>→</Text>
-        </Pressable>
-        <Pressable style={styles.quickAction}>
-          <Text style={styles.quickIcon}>👨‍👩‍👧‍👦</Text>
-          <View style={styles.quickTextArea}>
-            <Text style={styles.quickTitle}>Invite Family</Text>
-            <Text style={styles.quickSubtitle}>Share vault access with members</Text>
-          </View>
-          <Text style={styles.arrow}>→</Text>
+          <ChevronRight size={20} color={Colors.textMuted} />
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -120,5 +113,4 @@ const styles = StyleSheet.create({
   quickTextArea: { flex: 1 },
   quickTitle: { ...Typography.body, color: Colors.text, fontFamily: 'Inter_600SemiBold' },
   quickSubtitle: { ...Typography.bodySm, color: Colors.textMuted },
-  arrow: { fontSize: 20, color: Colors.textMuted },
 });

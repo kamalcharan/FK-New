@@ -1,5 +1,5 @@
 // app/(auth)/sign-in.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -13,22 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists } from '../../src/lib/supabase';
-import { isValidPhoneNumber } from '../../src/lib/otp';
-import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
+import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists, signInWithGoogle } from '../../src/lib/supabase';
+import { showErrorToast, showSuccessToast } from '../../src/components/ToastConfig';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
-import {
-  useGoogleAuth,
-  exchangeCodeForTokens,
-  signInWithGoogleToken,
-  storeGoogleTokens,
-  isGoogleAuthConfigured,
-  getGoogleUserInfo,
-} from '../../src/lib/googleAuth';
 
 // Helper to wait for user records to be created by DB trigger
 const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boolean> => {
@@ -49,25 +41,16 @@ const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boo
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();
-  const [identifier, setIdentifier] = useState(''); // email or phone
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Google Auth hook
-  const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
-
-  // Detect if input is phone or email
-  const isPhone = /^\d+$/.test(identifier.replace(/\D/g, '')) && identifier.length <= 12;
-  const isEmail = identifier.includes('@');
-
   // Validation
-  const isIdentifierValid = isEmail
-    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)
-    : isValidPhoneNumber(identifier);
-  const isFormValid = isIdentifierValid && password.length >= 8;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isFormValid = isEmailValid && password.length >= 8;
 
   const handleSignIn = async () => {
     if (!isFormValid) return;
@@ -82,7 +65,7 @@ export default function SignInScreen() {
         return;
       }
 
-      const { user, session } = await signInWithPassword(identifier, password);
+      const { user, session } = await signInWithPassword(email, password);
 
       if (user) {
         // Update Redux with user info
@@ -134,105 +117,79 @@ export default function SignInScreen() {
     }
   };
 
-  // Handle Google OAuth response
-  useEffect(() => {
-    const handleGoogleResponse = async () => {
-      if (googleResponse?.type === 'success' && googleResponse.params.code) {
-        setIsGoogleLoading(true);
-        try {
-          // Exchange code for tokens
-          const tokens = await exchangeCodeForTokens(
-            googleResponse.params.code,
-            googleRequest?.codeVerifier || '',
-            redirectUri
-          );
-
-          if (!tokens) {
-            showErrorToast('Google Sign-In Failed', 'Could not authenticate with Google');
-            return;
-          }
-
-          // Sign in to Supabase with the ID token
-          const { user, session } = await signInWithGoogleToken(tokens.id_token);
-
-          if (!user) {
-            showErrorToast('Sign-In Failed', 'Could not create account');
-            return;
-          }
-
-          // Store Google tokens for Drive access
-          await storeGoogleTokens({
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          });
-
-          // Get user info for Redux
-          const googleUser = await getGoogleUserInfo(tokens.access_token);
-
-          // Update Redux with user info
-          dispatch(setUser({
-            id: user.id,
-            email: user.email || googleUser?.email || '',
-            full_name: user.user_metadata?.full_name || googleUser?.name,
-            avatar_url: user.user_metadata?.avatar_url || googleUser?.picture,
-            created_at: user.created_at,
-          }));
-
-          // Wait for DB trigger to create user records
-          await waitForUserRecords(user.id);
-
-          // Fetch workspace and profile to determine navigation
-          const [workspace, profile] = await Promise.all([
-            getWorkspaceForUser(user.id),
-            getUserProfile(user.id),
-          ]);
-
-          // Determine where to navigate
-          if (!workspace) {
-            showSuccessToast('Welcome!', 'Let\'s set up your vault');
-            router.replace({
-              pathname: '/(auth)/workspace-setup',
-              params: { userName: googleUser?.name || '' },
-            });
-          } else if (!profile?.onboarding_completed) {
-            dispatch(setWorkspace(workspace));
-            showSuccessToast('Welcome Back', 'Continue setting up your vault');
-            router.replace({
-              pathname: '/(auth)/family-invite',
-              params: {
-                workspaceName: workspace.name,
-                workspaceId: workspace.id,
-              },
-            });
-          } else {
-            dispatch(setWorkspace(workspace));
-            showSuccessToast('Welcome Back', 'Signed in with Google');
-            router.replace('/(tabs)');
-          }
-        } catch (err: any) {
-          console.error('[GoogleAuth] Error:', err);
-          showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
-        } finally {
-          setIsGoogleLoading(false);
-        }
-      } else if (googleResponse?.type === 'error') {
-        showErrorToast('Google Sign-In Failed', googleResponse.error?.message || 'Please try again');
-      }
-    };
-
-    handleGoogleResponse();
-  }, [googleResponse]);
-
+  // Handle Google Sign-in using Supabase OAuth
   const handleGoogleSignIn = async () => {
-    if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Google Sign-In is not configured yet');
-      return;
-    }
-
+    setIsGoogleLoading(true);
     try {
-      await googlePromptAsync();
+      console.log('[GoogleSignIn] Starting Supabase Google OAuth...');
+
+      const result = await signInWithGoogle();
+
+      if (!result) {
+        console.log('[GoogleSignIn] User cancelled sign-in');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      const { user } = result;
+
+      if (!user) {
+        showErrorToast('Sign-In Failed', 'Could not sign in with Google');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      console.log('[GoogleSignIn] Auth successful, user:', user.id);
+
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
+      // Wait for DB trigger to create user records
+      console.log('[GoogleSignIn] Waiting for user records...');
+      await waitForUserRecords(user.id);
+
+      // Check user's workspace and onboarding status
+      const [workspace, profile] = await Promise.all([
+        getWorkspaceForUser(user.id),
+        getUserProfile(user.id),
+      ]);
+
+      if (!workspace) {
+        // New user - go to profile setup first
+        const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
+        showSuccessToast('Welcome!', 'Let\'s complete your profile');
+        setIsGoogleLoading(false);
+        router.replace({
+          pathname: '/(auth)/profile-setup',
+          params: { userName },
+        });
+      } else if (!profile?.onboarding_completed) {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
+        showSuccessToast('Welcome Back!', 'Let\'s finish setup');
+        setIsGoogleLoading(false);
+        router.replace({
+          pathname: '/(auth)/family-invite',
+          params: { workspaceName: workspace.name, workspaceId: workspace.id },
+        });
+      } else {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
+        showSuccessToast('Welcome Back!', 'Signed in with Google');
+        setIsGoogleLoading(false);
+        router.replace('/(tabs)');
+      }
+
     } catch (err: any) {
-      showErrorToast('Error', 'Could not start Google Sign-In');
+      console.error('[GoogleSignIn] Error:', err);
+      showErrorToast('Google Sign-In Failed', err.message || 'Please try again');
+      setIsGoogleLoading(false);
     }
   };
 
@@ -272,27 +229,22 @@ export default function SignInScreen() {
 
           {/* Form */}
           <View style={styles.form}>
-            {/* Email or Phone */}
+            {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>EMAIL OR PHONE</Text>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
               <TextInput
-                value={identifier}
+                value={email}
                 onChangeText={(text) => {
-                  setIdentifier(text.trim());
+                  setEmail(text.toLowerCase().trim());
                   setError('');
                 }}
-                placeholder="Enter email or phone number"
+                placeholder="Enter your email address"
                 placeholderTextColor={Colors.textPlaceholder}
-                keyboardType={isPhone ? 'phone-pad' : 'email-address'}
+                keyboardType="email-address"
                 autoCapitalize="none"
-                autoComplete="username"
+                autoComplete="email"
                 style={styles.input}
               />
-              {identifier.length > 0 && (
-                <Text style={styles.hint}>
-                  {isPhone ? '📱 Signing in with phone' : '✉️ Signing in with email'}
-                </Text>
-              )}
             </View>
 
             {/* Password */}
@@ -315,9 +267,11 @@ export default function SignInScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.showButton}
                 >
-                  <Text style={styles.showButtonText}>
-                    {showPassword ? 'Hide' : 'Show'}
-                  </Text>
+                  {showPassword ? (
+                    <EyeOff size={20} color={Colors.textMuted} />
+                  ) : (
+                    <Eye size={20} color={Colors.textMuted} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -349,8 +303,8 @@ export default function SignInScreen() {
           {/* Google Sign In */}
           <Pressable
             onPress={handleGoogleSignIn}
-            style={[styles.googleButton, (isGoogleLoading || !googleRequest) && styles.googleButtonDisabled]}
-            disabled={isGoogleLoading || !googleRequest}
+            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]}
+            disabled={isGoogleLoading}
           >
             {isGoogleLoading ? (
               <ActivityIndicator size="small" color="#1a1a1a" />
@@ -442,11 +396,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.text,
   },
-  hint: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
   passwordContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.inputBackground,
@@ -464,10 +413,6 @@ const styles = StyleSheet.create({
   showButton: {
     justifyContent: 'center',
     paddingHorizontal: 16,
-  },
-  showButtonText: {
-    ...Typography.bodySm,
-    color: Colors.primary,
   },
   forgotButton: {
     alignSelf: 'flex-end',

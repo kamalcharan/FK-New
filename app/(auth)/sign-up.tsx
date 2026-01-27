@@ -1,5 +1,5 @@
 // app/(auth)/sign-up.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -14,18 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Typography, BorderRadius, GlassStyle } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
-import { signUpWithEmail, signUpWithPhone, isSupabaseReady, supabase, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists, getWorkspaceForUser } from '../../src/lib/supabase';
-import {
-  useGoogleAuth,
-  exchangeCodeForTokens,
-  signInWithGoogleToken,
-  storeGoogleTokens,
-  isGoogleAuthConfigured,
-  getGoogleUserInfo,
-} from '../../src/lib/googleAuth';
+import { signUpWithEmail, isSupabaseReady, acceptFamilyInvite, updateOnboardingStatus, getUserProfile, checkFkUserExists, getWorkspaceForUser, signInWithGoogle } from '../../src/lib/supabase';
+import { isGoogleAuthConfigured } from '../../src/lib/googleAuth';
+import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
+import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 // Helper to wait for user records to be created by DB trigger
 // The trigger creates fk_users and fk_user_profiles after auth.users is created
@@ -53,12 +49,9 @@ const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boo
   console.warn('[Signup] User records not created after max attempts');
   return false;
 };
-import { isValidPhoneNumber } from '../../src/lib/otp';
+// Phone OTP auth hidden for now
+// import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
-import { useAppDispatch } from '../../src/hooks/useStore';
-import { setWorkspace } from '../../src/store/slices/workspaceSlice';
-
-type SignUpMethod = 'phone' | 'email';
 
 export default function SignUpScreen() {
   // Get invite context from verify-invite screen
@@ -79,8 +72,6 @@ export default function SignUpScreen() {
   const hasInviteContext = Boolean(inviteCodeParam && workspaceName);
 
   const dispatch = useAppDispatch();
-  const [method, setMethod] = useState<SignUpMethod>('email');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -89,13 +80,9 @@ export default function SignUpScreen() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Google Auth hook
-  const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
-
-  const isPhoneValid = isValidPhoneNumber(phone);
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isPasswordValid = password.length >= 8;
-  const isFormValid = (method === 'phone' ? isPhoneValid : isEmailValid) && isPasswordValid;
+  const isFormValid = isEmailValid && isPasswordValid;
 
   const handleSignUp = async () => {
     setError('');
@@ -111,12 +98,7 @@ export default function SignUpScreen() {
         return;
       }
 
-      let signUpResult;
-      if (method === 'phone') {
-        signUpResult = await signUpWithPhone(phone, password, fullName);
-      } else {
-        signUpResult = await signUpWithEmail(email, password, fullName);
-      }
+      const signUpResult = await signUpWithEmail(email, password, fullName);
 
       // Check if we have a session (email confirmation might be required)
       if (!signUpResult.session) {
@@ -189,119 +171,101 @@ export default function SignUpScreen() {
     }
   };
 
-  // Handle Google OAuth response
-  useEffect(() => {
-    const handleGoogleResponse = async () => {
-      if (googleResponse?.type === 'success' && googleResponse.params.code) {
-        setIsGoogleLoading(true);
-        try {
-          // Exchange code for tokens
-          const tokens = await exchangeCodeForTokens(
-            googleResponse.params.code,
-            googleRequest?.codeVerifier || '',
-            redirectUri
-          );
-
-          if (!tokens) {
-            showErrorToast('Google Sign-Up Failed', 'Could not authenticate with Google');
-            return;
-          }
-
-          // Sign in to Supabase with the ID token
-          const { user, session } = await signInWithGoogleToken(tokens.id_token);
-
-          if (!user) {
-            showErrorToast('Sign-Up Failed', 'Could not create account');
-            return;
-          }
-
-          // Store Google tokens for Drive access
-          await storeGoogleTokens({
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          });
-
-          // Get user info for Redux
-          const googleUser = await getGoogleUserInfo(tokens.access_token);
-
-          // Update Redux with user info
-          dispatch(setUser({
-            id: user.id,
-            email: user.email || googleUser?.email || '',
-            full_name: user.user_metadata?.full_name || googleUser?.name,
-            avatar_url: user.user_metadata?.avatar_url || googleUser?.picture,
-            created_at: user.created_at,
-          }));
-
-          // Wait for DB trigger to create user records
-          await waitForUserRecords(user.id);
-
-          // If we have an invite code, try to accept it
-          if (inviteCodeParam) {
-            try {
-              const result = await acceptFamilyInvite(inviteCodeParam, user.id);
-              if (result.success && result.workspace_id) {
-                dispatch(setWorkspace({
-                  id: result.workspace_id,
-                  name: result.workspace_name || 'Family Vault',
-                  owner_id: '',
-                  created_at: new Date().toISOString(),
-                }));
-                await updateOnboardingStatus(user.id, true);
-                showSuccessToast('Welcome!', `You've joined ${result.workspace_name}`);
-                router.replace('/(tabs)');
-                return;
-              }
-            } catch (inviteErr) {
-              console.warn('[GoogleSignUp] Invite error:', inviteErr);
-            }
-          }
-
-          // Check if user already has a workspace
-          const workspace = await getWorkspaceForUser(user.id);
-          if (workspace) {
-            dispatch(setWorkspace(workspace));
-            const profile = await getUserProfile(user.id);
-            if (profile?.onboarding_completed) {
-              showSuccessToast('Welcome Back', 'Signed in with Google');
-              router.replace('/(tabs)');
-            } else {
-              router.replace({
-                pathname: '/(auth)/family-invite',
-                params: { workspaceName: workspace.name, workspaceId: workspace.id },
-              });
-            }
-          } else {
-            showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
-            router.replace({
-              pathname: '/(auth)/workspace-setup',
-              params: { userName: googleUser?.name || '' },
-            });
-          }
-        } catch (err: any) {
-          console.error('[GoogleSignUp] Error:', err);
-          showErrorToast('Google Sign-Up Failed', err.message || 'Please try again');
-        } finally {
-          setIsGoogleLoading(false);
-        }
-      } else if (googleResponse?.type === 'error') {
-        showErrorToast('Google Sign-Up Failed', googleResponse.error?.message || 'Please try again');
-      }
-    };
-
-    handleGoogleResponse();
-  }, [googleResponse]);
-
+  // Handle Google Sign-up using Supabase OAuth
   const handleGoogleSignUp = async () => {
-    if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Google Sign-In is not configured yet');
-      return;
-    }
-
+    setIsGoogleLoading(true);
     try {
-      await googlePromptAsync();
+      console.log('[GoogleSignUp] Starting Supabase Google OAuth...');
+
+      const result = await signInWithGoogle();
+
+      if (!result) {
+        console.log('[GoogleSignUp] User cancelled sign-up');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      const { user } = result;
+
+      if (!user) {
+        showErrorToast('Sign-Up Failed', 'Could not create account');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      console.log('[GoogleSignUp] Auth successful, user:', user.id);
+
+      // Update Redux with user info
+      dispatch(setUser({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+        created_at: user.created_at,
+      }));
+
+      // Wait for DB trigger to create user records
+      console.log('[GoogleSignUp] Waiting for user records...');
+      await waitForUserRecords(user.id);
+
+      // Handle invite code if present
+      if (inviteCodeParam) {
+        try {
+          console.log('[GoogleSignUp] Processing invite code...');
+          const inviteResult = await acceptFamilyInvite(inviteCodeParam, user.id);
+          if (inviteResult.success && inviteResult.workspace_id) {
+            // Store workspace in Redux
+            dispatch(setWorkspace({
+              id: inviteResult.workspace_id,
+              name: inviteResult.workspace_name || 'Family Vault',
+              owner_id: '',
+              created_at: new Date().toISOString(),
+            }));
+            await updateOnboardingStatus(user.id, true);
+            showSuccessToast('Welcome!', `You've joined ${inviteResult.workspace_name}`);
+            setIsGoogleLoading(false);
+            router.replace('/(tabs)');
+            return;
+          }
+        } catch (inviteErr) {
+          console.warn('[GoogleSignUp] Invite error:', inviteErr);
+        }
+      }
+
+      // Check if user has existing workspace
+      const workspace = await getWorkspaceForUser(user.id);
+
+      if (workspace) {
+        // Store workspace in Redux
+        dispatch(setWorkspace(workspace));
+        const profile = await getUserProfile(user.id);
+        if (profile?.onboarding_completed) {
+          showSuccessToast('Welcome Back!', 'Signed in with Google');
+          setIsGoogleLoading(false);
+          router.replace('/(tabs)');
+        } else {
+          showSuccessToast('Welcome Back!', 'Let\'s finish setup');
+          setIsGoogleLoading(false);
+          router.replace({
+            pathname: '/(auth)/family-invite',
+            params: { workspaceName: workspace.name, workspaceId: workspace.id },
+          });
+        }
+      } else {
+        // New user - go to profile setup first
+        const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
+        showSuccessToast('Account Created!', 'Welcome to FamilyKnows');
+        setIsGoogleLoading(false);
+        router.replace({
+          pathname: '/(auth)/profile-setup',
+          params: { userName },
+        });
+      }
+
     } catch (err: any) {
-      showErrorToast('Error', 'Could not start Google Sign-Up');
+      console.error('[GoogleSignUp] Error:', err);
+      showErrorToast('Google Sign-Up Failed', err.message || 'Please try again');
+      setIsGoogleLoading(false);
     }
   };
 
@@ -363,42 +327,6 @@ export default function SignUpScreen() {
             </Pressable>
           )}
 
-          {/* Method Toggle */}
-          <View style={styles.toggleContainer}>
-            <Pressable
-              onPress={() => setMethod('phone')}
-              style={[
-                styles.toggleButton,
-                method === 'phone' ? styles.toggleActive : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.toggleText,
-                  method === 'phone' ? styles.toggleTextActive : null,
-                ]}
-              >
-                Phone
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMethod('email')}
-              style={[
-                styles.toggleButton,
-                method === 'email' ? styles.toggleActive : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.toggleText,
-                  method === 'email' ? styles.toggleTextActive : null,
-                ]}
-              >
-                Email
-              </Text>
-            </Pressable>
-          </View>
-
           {/* Input Fields */}
           <View style={styles.inputContainer}>
             {/* Full Name */}
@@ -415,43 +343,22 @@ export default function SignUpScreen() {
               />
             </View>
 
-            {/* Email or Phone */}
+            {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>{method === 'phone' ? 'PHONE NUMBER' : 'EMAIL ADDRESS'}</Text>
-              {method === 'phone' ? (
-                <View style={styles.phoneInputRow}>
-                  <View style={styles.countryCode}>
-                    <Text style={styles.countryCodeText}>+91</Text>
-                  </View>
-                  <TextInput
-                    value={phone}
-                    onChangeText={(text) => {
-                      setPhone(text.replace(/\D/g, ''));
-                      setError('');
-                    }}
-                    placeholder="Enter mobile number"
-                    placeholderTextColor={Colors.textPlaceholder}
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    style={styles.phoneInput}
-                    autoComplete="tel"
-                  />
-                </View>
-              ) : (
-                <TextInput
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text.toLowerCase().trim());
-                    setError('');
-                  }}
-                  placeholder="Enter email address"
-                  placeholderTextColor={Colors.textPlaceholder}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  style={styles.emailInput}
-                />
-              )}
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <TextInput
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text.toLowerCase().trim());
+                  setError('');
+                }}
+                placeholder="Enter email address"
+                placeholderTextColor={Colors.textPlaceholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                style={styles.emailInput}
+              />
             </View>
 
             {/* Password */}
@@ -474,9 +381,11 @@ export default function SignUpScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.showButton}
                 >
-                  <Text style={styles.showButtonText}>
-                    {showPassword ? 'Hide' : 'Show'}
-                  </Text>
+                  {showPassword ? (
+                    <EyeOff size={20} color={Colors.textMuted} />
+                  ) : (
+                    <Eye size={20} color={Colors.textMuted} />
+                  )}
                 </Pressable>
               </View>
               {password.length > 0 && password.length < 8 ? (
@@ -506,8 +415,8 @@ export default function SignUpScreen() {
           {/* Google Sign Up */}
           <Pressable
             onPress={handleGoogleSignUp}
-            style={[styles.googleButton, (isGoogleLoading || !googleRequest) && styles.googleButtonDisabled]}
-            disabled={isGoogleLoading || !googleRequest}
+            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]}
+            disabled={isGoogleLoading}
           >
             {isGoogleLoading ? (
               <ActivityIndicator size="small" color="#1a1a1a" />
@@ -570,29 +479,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  toggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.inputBackground,
-    borderRadius: BorderRadius.lg,
-    padding: 4,
-    marginBottom: 24,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: BorderRadius.md,
-  },
-  toggleActive: {
-    backgroundColor: Colors.primary,
-  },
-  toggleText: {
-    ...Typography.button,
-    color: Colors.textMuted,
-  },
-  toggleTextActive: {
-    color: Colors.background,
-  },
   inputContainer: {
     marginBottom: 24,
     gap: 20,
@@ -605,10 +491,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
     letterSpacing: 1.5,
-  },
-  phoneInputRow: {
-    flexDirection: 'row',
-    gap: 12,
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -628,37 +510,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  showButtonText: {
-    ...Typography.bodySm,
-    color: Colors.primary,
-  },
   passwordHint: {
     ...Typography.bodySm,
     color: Colors.warning,
     marginTop: 4,
-  },
-  countryCode: {
-    backgroundColor: Colors.inputBackground,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.inputBorder,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  countryCodeText: {
-    ...Typography.body,
-    color: Colors.text,
-  },
-  phoneInput: {
-    flex: 1,
-    backgroundColor: Colors.inputBackground,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.inputBorder,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    ...Typography.body,
-    color: Colors.text,
   },
   emailInput: {
     backgroundColor: Colors.inputBackground,

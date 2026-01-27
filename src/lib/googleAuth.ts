@@ -2,7 +2,10 @@
 // Google OAuth and Drive integration for FamilyKnows
 
 import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { supabase, isSupabaseReady } from './supabase';
 
 // Complete the auth session when the app redirects back
@@ -13,36 +16,52 @@ WebBrowser.maybeCompleteAuthSession();
 // 1. Create OAuth 2.0 Client ID (Web application)
 // 2. Add authorized redirect URIs:
 //    - For Expo Go: https://auth.expo.io/@your-username/familyknows
-//    - For standalone: your-scheme://
+//    - For standalone: familyknows://auth/callback
 // 3. Enable Google Drive API in the console
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_ID_IOS = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_ID_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || GOOGLE_CLIENT_ID;
 
+// Expo username for auth proxy (update this to your Expo username)
+const EXPO_USERNAME = process.env.EXPO_PUBLIC_EXPO_USERNAME || 'kamalcharan';
+
 // Discovery document for Google OAuth
-const discovery = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
+const discovery = Google.discovery;
 
 // Scopes we need:
 // - openid, profile, email: Standard OAuth scopes for user info
-// - drive.file: Access to files created by the app (for backup/restore)
+// - drive.file: Access to files created by the app (for backup/restore) - ADD LATER after verification
 const SCOPES = [
   'openid',
   'profile',
   'email',
-  'https://www.googleapis.com/auth/drive.file', // Only access files created by the app
+  // 'https://www.googleapis.com/auth/drive.file', // Temporarily disabled - requires app verification
 ];
 
-// Get the appropriate redirect URI based on platform
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+console.log('[GoogleAuth] App ownership:', Constants.appOwnership, 'isExpoGo:', isExpoGo);
+
+// Get the appropriate redirect URI based on platform and environment
 export const getRedirectUri = () => {
-  return AuthSession.makeRedirectUri({
+  // For Expo Go, use makeRedirectUri which handles the proxy automatically
+  // For standalone apps, use the custom scheme
+  const redirectUri = AuthSession.makeRedirectUri({
     scheme: 'familyknows',
     path: 'auth/callback',
+    // Note: Don't set useProxy here - it's handled in promptAsync
   });
+
+  console.log('[GoogleAuth] Generated redirect URI:', redirectUri);
+  console.log('[GoogleAuth] isExpoGo:', isExpoGo);
+
+  return redirectUri;
+};
+
+// Get the redirect URI for setup reference
+export const getExpoProxyRedirectUri = () => {
+  return `https://auth.expo.io/@${EXPO_USERNAME}/familyknows`;
 };
 
 // Check if Google auth is configured
@@ -52,24 +71,43 @@ export const isGoogleAuthConfigured = () => {
 
 // Google Auth hook for use in components
 export const useGoogleAuth = () => {
-  const redirectUri = getRedirectUri();
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: SCOPES,
-      redirectUri,
-      responseType: AuthSession.ResponseType.Code,
-      usePKCE: true,
-      extraParams: {
-        access_type: 'offline', // Get refresh token
-        prompt: 'consent',      // Always show consent screen to get refresh token
-      },
+  // Use Expo's Google provider which handles Expo Go proxy automatically
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_CLIENT_ID,
+    iosClientId: GOOGLE_CLIENT_ID_IOS,
+    androidClientId: GOOGLE_CLIENT_ID_ANDROID,
+    scopes: SCOPES,
+    extraParams: {
+      access_type: 'offline', // Get refresh token
+      prompt: 'consent',      // Always show consent screen
     },
-    discovery
-  );
+  });
 
-  return { request, response, promptAsync, redirectUri };
+  // Get the redirect URI for logging/debugging
+  const redirectUri = request?.redirectUri || AuthSession.makeRedirectUri({
+    scheme: 'familyknows',
+    path: 'auth/callback',
+  });
+
+  console.log('[GoogleAuth] Hook initialized');
+  console.log('[GoogleAuth] Client ID:', GOOGLE_CLIENT_ID ? `${GOOGLE_CLIENT_ID.substring(0, 20)}...` : 'NOT SET');
+  console.log('[GoogleAuth] isExpoGo:', isExpoGo);
+
+  // Log the full auth URL for debugging
+  if (request) {
+    console.log('[GoogleAuth] Auth request ready');
+    console.log('[GoogleAuth] Request redirectUri:', request.redirectUri);
+    console.log('[GoogleAuth] Request codeVerifier exists:', !!request.codeVerifier);
+  }
+
+  // Wrapped promptAsync with logging
+  const wrappedPromptAsync = async (options?: AuthSession.AuthRequestPromptOptions) => {
+    console.log('[GoogleAuth] promptAsync called');
+    console.log('[GoogleAuth] Current redirectUri:', request?.redirectUri);
+    return promptAsync(options);
+  };
+
+  return { request, response, promptAsync: wrappedPromptAsync, redirectUri };
 };
 
 // Exchange authorization code for tokens
