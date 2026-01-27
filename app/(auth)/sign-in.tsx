@@ -210,7 +210,26 @@ export default function SignInScreen() {
           setIsGoogleLoading(false);
         }
       } else if (googleResponse?.type === 'error') {
-        showErrorToast('Google Sign-In Failed', googleResponse.error?.message || 'Please try again');
+        console.error('[GoogleAuth] Auth error:', googleResponse.error);
+        const errorMsg = googleResponse.error?.message || '';
+
+        // Handle specific Google OAuth errors
+        if (errorMsg.includes('access_blocked') || errorMsg.includes('Authorization Error')) {
+          showErrorToast(
+            'Access Blocked',
+            'Please check Google Cloud Console configuration. Redirect URI may not be registered.'
+          );
+        } else if (errorMsg.includes('redirect_uri_mismatch')) {
+          showErrorToast(
+            'Configuration Error',
+            'Redirect URI mismatch. Check Google Cloud Console settings.'
+          );
+        } else {
+          showErrorToast('Google Sign-In Failed', errorMsg || 'Please try again');
+        }
+      } else if (googleResponse?.type === 'dismiss') {
+        // User dismissed the sign-in modal - no error needed
+        console.log('[GoogleAuth] User dismissed sign-in');
       }
     };
 
@@ -219,14 +238,20 @@ export default function SignInScreen() {
 
   const handleGoogleSignIn = async () => {
     if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Google Sign-In is not configured yet');
+      showWarningToast('Not Configured', 'Add EXPO_PUBLIC_GOOGLE_CLIENT_ID to your .env file');
+      console.log('[GoogleAuth] Client ID not configured');
+      console.log('[GoogleAuth] Redirect URI would be:', redirectUri);
       return;
     }
 
+    console.log('[GoogleAuth] Starting sign-in with redirect URI:', redirectUri);
+
     try {
-      await googlePromptAsync();
+      const result = await googlePromptAsync();
+      console.log('[GoogleAuth] Prompt result:', result?.type);
     } catch (err: any) {
-      showErrorToast('Error', 'Could not start Google Sign-In');
+      console.error('[GoogleAuth] Prompt error:', err);
+      showErrorToast('Error', err.message || 'Could not start Google Sign-In');
     }
   };
 

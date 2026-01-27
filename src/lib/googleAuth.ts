@@ -39,10 +39,24 @@ const SCOPES = [
 
 // Get the appropriate redirect URI based on platform
 export const getRedirectUri = () => {
-  return AuthSession.makeRedirectUri({
+  // This generates the correct redirect URI for each environment:
+  // - Expo Go: https://auth.expo.io/@username/familyknows
+  // - Dev Build: familyknows://auth/callback
+  // - Standalone: familyknows://auth/callback
+  const redirectUri = AuthSession.makeRedirectUri({
     scheme: 'familyknows',
     path: 'auth/callback',
   });
+
+  console.log('[GoogleAuth] Redirect URI:', redirectUri);
+  return redirectUri;
+};
+
+// Get the redirect URI specifically for Expo Go (for logging/setup purposes)
+export const getExpoGoRedirectUri = () => {
+  // This is the format needed for Expo Go
+  // Replace YOUR_USERNAME with your Expo account username
+  return 'https://auth.expo.io/@YOUR_USERNAME/familyknows';
 };
 
 // Check if Google auth is configured

@@ -277,7 +277,26 @@ export default function SignUpScreen() {
           setIsGoogleLoading(false);
         }
       } else if (googleResponse?.type === 'error') {
-        showErrorToast('Google Sign-Up Failed', googleResponse.error?.message || 'Please try again');
+        console.error('[GoogleSignUp] Auth error:', googleResponse.error);
+        const errorMsg = googleResponse.error?.message || '';
+
+        // Handle specific Google OAuth errors
+        if (errorMsg.includes('access_blocked') || errorMsg.includes('Authorization Error')) {
+          showErrorToast(
+            'Access Blocked',
+            'Please check Google Cloud Console configuration. Redirect URI may not be registered.'
+          );
+        } else if (errorMsg.includes('redirect_uri_mismatch')) {
+          showErrorToast(
+            'Configuration Error',
+            'Redirect URI mismatch. Check Google Cloud Console settings.'
+          );
+        } else {
+          showErrorToast('Google Sign-Up Failed', errorMsg || 'Please try again');
+        }
+      } else if (googleResponse?.type === 'dismiss') {
+        // User dismissed - no error needed
+        console.log('[GoogleSignUp] User dismissed sign-up');
       }
     };
 
@@ -286,14 +305,20 @@ export default function SignUpScreen() {
 
   const handleGoogleSignUp = async () => {
     if (!isGoogleAuthConfigured()) {
-      showWarningToast('Not Configured', 'Google Sign-In is not configured yet');
+      showWarningToast('Not Configured', 'Add EXPO_PUBLIC_GOOGLE_CLIENT_ID to your .env file');
+      console.log('[GoogleSignUp] Client ID not configured');
+      console.log('[GoogleSignUp] Redirect URI would be:', redirectUri);
       return;
     }
 
+    console.log('[GoogleSignUp] Starting sign-up with redirect URI:', redirectUri);
+
     try {
-      await googlePromptAsync();
+      const result = await googlePromptAsync();
+      console.log('[GoogleSignUp] Prompt result:', result?.type);
     } catch (err: any) {
-      showErrorToast('Error', 'Could not start Google Sign-Up');
+      console.error('[GoogleSignUp] Prompt error:', err);
+      showErrorToast('Error', err.message || 'Could not start Google Sign-Up');
     }
   };
 
