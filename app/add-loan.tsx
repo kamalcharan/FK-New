@@ -60,6 +60,7 @@ export default function AddLoanScreen() {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsPermission, setContactsPermission] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState('');
+  const [saveWithVerification, setSaveWithVerification] = useState(true); // New: radio option for save mode
 
   // Load contacts when picker opens
   const loadContacts = async () => {
@@ -413,18 +414,60 @@ This creates a trusted digital handshake between us.
               />
             </View>
 
-            {/* Info Note */}
-            {!isHistorical ? (
-              <View style={styles.verificationNote}>
-                <Text style={styles.verificationIcon}>🤝</Text>
-                <View style={styles.verificationTextContainer}>
-                  <Text style={styles.verificationTitle}>Digital Handshake</Text>
-                  <Text style={styles.verificationText}>
-                    Choose "Save & Share" to send a verification code via WhatsApp. The counterparty verifies on our website.
-                  </Text>
-                </View>
+            {/* Save Mode Selection - Only for non-historical loans */}
+            {!isHistorical && (
+              <View style={styles.saveModeContainer}>
+                <Text style={styles.saveModeLabel}>AFTER SAVING</Text>
+
+                {/* Option 1: Share for Verification */}
+                <Pressable
+                  style={[styles.saveModeOption, saveWithVerification && styles.saveModeOptionActive]}
+                  onPress={() => setSaveWithVerification(true)}
+                >
+                  <View style={[styles.radioOuter, saveWithVerification && styles.radioOuterActive]}>
+                    {saveWithVerification && <View style={styles.radioInner} />}
+                  </View>
+                  <View style={styles.saveModeContent}>
+                    <View style={styles.saveModeHeader}>
+                      <Text style={styles.saveModeEmoji}>📤</Text>
+                      <Text style={[styles.saveModeTitle, saveWithVerification && styles.saveModeTitleActive]}>
+                        Share via WhatsApp
+                      </Text>
+                      <View style={styles.recommendedBadge}>
+                        <Text style={styles.recommendedText}>Recommended</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.saveModeDesc}>
+                      Send verification link to {counterpartyName || 'counterparty'}. Creates a trusted digital handshake.
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {/* Option 2: Save Only */}
+                <Pressable
+                  style={[styles.saveModeOption, !saveWithVerification && styles.saveModeOptionActive]}
+                  onPress={() => setSaveWithVerification(false)}
+                >
+                  <View style={[styles.radioOuter, !saveWithVerification && styles.radioOuterActive]}>
+                    {!saveWithVerification && <View style={styles.radioInner} />}
+                  </View>
+                  <View style={styles.saveModeContent}>
+                    <View style={styles.saveModeHeader}>
+                      <Text style={styles.saveModeEmoji}>💾</Text>
+                      <Text style={[styles.saveModeTitle, !saveWithVerification && styles.saveModeTitleActive]}>
+                        Save Only
+                      </Text>
+                    </View>
+                    <Text style={styles.saveModeDesc}>
+                      Save for your records. You can share for verification later.
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
-            ) : (
+            )}
+
+            {/* Historical Loan Note */}
+            {isHistorical && (
               <View style={[styles.verificationNote, styles.historicalNote]}>
                 <Text style={styles.verificationIcon}>📜</Text>
                 <View style={styles.verificationTextContainer}>
@@ -435,42 +478,34 @@ This creates a trusted digital handshake between us.
             )}
           </View>
 
-          {/* Submit Buttons */}
-          <View style={styles.submitButtons}>
-            {/* Save Only Button */}
-            <Pressable
-              style={[styles.saveOnlyButton, (!isFormValid || isSubmitting) && styles.buttonDisabled]}
-              onPress={() => handleSave(false)}
-              disabled={!isFormValid || isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={Colors.text} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.saveOnlyIcon}>💾</Text>
-                  <Text style={styles.saveOnlyText}>Save Record</Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* Save & Share Button - Only for non-historical loans */}
-            {!isHistorical && (
-              <Pressable
-                style={[styles.shareButton, (!canVerify || isSubmitting) && styles.buttonDisabled]}
-                onPress={() => handleSave(true)}
-                disabled={!canVerify || isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#000" size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.shareButtonIcon}>📤</Text>
-                    <Text style={styles.shareButtonText}>Save & Share for Verification</Text>
-                  </>
-                )}
-              </Pressable>
+          {/* Single Submit Button */}
+          <Pressable
+            style={[
+              styles.submitButton,
+              (!isFormValid || isSubmitting || (saveWithVerification && !canVerify && !isHistorical)) && styles.buttonDisabled
+            ]}
+            onPress={() => handleSave(saveWithVerification && !isHistorical)}
+            disabled={!isFormValid || isSubmitting || (saveWithVerification && !canVerify && !isHistorical)}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#000" size="small" />
+            ) : (
+              <Text style={styles.submitButtonText}>
+                {isHistorical
+                  ? 'Save Historical Record'
+                  : saveWithVerification
+                    ? 'Save & Share via WhatsApp'
+                    : 'Save Record'}
+              </Text>
             )}
-          </View>
+          </Pressable>
+
+          {/* Phone Required Warning */}
+          {!isHistorical && saveWithVerification && !counterpartyPhone.trim() && (
+            <Text style={styles.phoneRequiredNote}>
+              📱 Phone number required to share via WhatsApp
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -677,31 +712,69 @@ const styles = StyleSheet.create({
   verificationTitle: { ...Typography.bodySm, fontFamily: 'Inter_600SemiBold', color: Colors.text, marginBottom: 4 },
   verificationText: { ...Typography.bodySm, color: Colors.textSecondary, lineHeight: 18 },
 
-  // Submit buttons
-  submitButtons: { gap: 12 },
-  saveOnlyButton: {
+  // Save mode selection
+  saveModeContainer: { gap: 12, marginTop: 8 },
+  saveModeLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, letterSpacing: 1.5, marginBottom: 4 },
+  saveModeOption: {
     ...GlassStyle,
-    paddingVertical: 16,
     borderRadius: BorderRadius.xl,
+    padding: 16,
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  saveModeOptionActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: Colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    marginTop: 2,
   },
-  saveOnlyIcon: { fontSize: 18 },
-  saveOnlyText: { ...Typography.button, color: Colors.text },
-  shareButton: {
+  radioOuterActive: { borderColor: Colors.primary },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.primary,
+  },
+  saveModeContent: { flex: 1 },
+  saveModeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  saveModeEmoji: { fontSize: 16 },
+  saveModeTitle: { ...Typography.body, color: Colors.textSecondary, fontFamily: 'Inter_600SemiBold' },
+  saveModeTitleActive: { color: Colors.text },
+  saveModeDesc: { ...Typography.bodySm, color: Colors.textMuted, lineHeight: 18 },
+  recommendedBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  recommendedText: { fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#22c55e', letterSpacing: 0.5 },
+
+  // Submit button
+  submitButton: {
     backgroundColor: Colors.text,
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: BorderRadius.xl,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    marginTop: 24,
   },
-  shareButtonIcon: { fontSize: 18 },
-  shareButtonText: { ...Typography.button, color: '#000' },
+  submitButtonText: { ...Typography.button, color: '#000', fontSize: 16 },
   buttonDisabled: { opacity: 0.5 },
+  phoneRequiredNote: {
+    ...Typography.bodySm,
+    color: Colors.warning,
+    textAlign: 'center',
+    marginTop: 12,
+  },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: Colors.background, borderTopLeftRadius: BorderRadius['3xl'], borderTopRightRadius: BorderRadius['3xl'], maxHeight: '70%', paddingTop: 20 },

@@ -255,6 +255,19 @@ export const getLoans = async (workspaceId: string) => {
   return data;
 };
 
+export const getLoanById = async (loanId: string) => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_loans')
+    .select('*')
+    .eq('id', loanId)
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 export const createLoan = async (loan: {
   workspace_id: string;
   created_by: string;
