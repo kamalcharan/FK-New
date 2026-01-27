@@ -126,7 +126,6 @@ export default function SignInScreen() {
       const result = await signInWithGoogle();
 
       if (!result) {
-        // User cancelled
         console.log('[GoogleSignIn] User cancelled sign-in');
         setIsGoogleLoading(false);
         return;
@@ -146,15 +145,33 @@ export default function SignInScreen() {
       console.log('[GoogleSignIn] Waiting for user records...');
       await waitForUserRecords(user.id);
 
-      // Show success message
-      showSuccessToast('Welcome Back!', 'Signed in with Google');
+      // Check user's workspace and onboarding status
+      const [workspace, profile] = await Promise.all([
+        getWorkspaceForUser(user.id),
+        getUserProfile(user.id),
+      ]);
 
-      // Let index.tsx handle routing based on auth state
-      // Small delay to let auth state settle
-      setTimeout(() => {
+      if (!workspace) {
+        // New user - go to workspace setup
+        const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
+        showSuccessToast('Welcome!', 'Let\'s set up your vault');
         setIsGoogleLoading(false);
-        router.replace('/');
-      }, 100);
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName },
+        });
+      } else if (!profile?.onboarding_completed) {
+        showSuccessToast('Welcome Back!', 'Let\'s finish setup');
+        setIsGoogleLoading(false);
+        router.replace({
+          pathname: '/(auth)/family-invite',
+          params: { workspaceName: workspace.name, workspaceId: workspace.id },
+        });
+      } else {
+        showSuccessToast('Welcome Back!', 'Signed in with Google');
+        setIsGoogleLoading(false);
+        router.replace('/(tabs)');
+      }
 
     } catch (err: any) {
       console.error('[GoogleSignIn] Error:', err);

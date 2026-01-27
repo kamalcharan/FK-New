@@ -180,7 +180,6 @@ export default function SignUpScreen() {
       const result = await signInWithGoogle();
 
       if (!result) {
-        // User cancelled
         console.log('[GoogleSignUp] User cancelled sign-up');
         setIsGoogleLoading(false);
         return;
@@ -200,7 +199,7 @@ export default function SignUpScreen() {
       console.log('[GoogleSignUp] Waiting for user records...');
       await waitForUserRecords(user.id);
 
-      // If we have an invite code, try to accept it
+      // Handle invite code if present
       if (inviteCodeParam) {
         try {
           console.log('[GoogleSignUp] Processing invite code...');
@@ -208,21 +207,42 @@ export default function SignUpScreen() {
           if (inviteResult.success && inviteResult.workspace_id) {
             await updateOnboardingStatus(user.id, true);
             showSuccessToast('Welcome!', `You've joined ${inviteResult.workspace_name}`);
+            setIsGoogleLoading(false);
+            router.replace('/(tabs)');
+            return;
           }
         } catch (inviteErr) {
           console.warn('[GoogleSignUp] Invite error:', inviteErr);
         }
       }
 
-      // Show success message
-      showSuccessToast('Success!', 'Signed in with Google');
+      // Check if user has existing workspace
+      const workspace = await getWorkspaceForUser(user.id);
 
-      // Let index.tsx handle routing based on auth state
-      // Small delay to let auth state settle
-      setTimeout(() => {
+      if (workspace) {
+        const profile = await getUserProfile(user.id);
+        if (profile?.onboarding_completed) {
+          showSuccessToast('Welcome Back!', 'Signed in with Google');
+          setIsGoogleLoading(false);
+          router.replace('/(tabs)');
+        } else {
+          showSuccessToast('Welcome Back!', 'Let\'s finish setup');
+          setIsGoogleLoading(false);
+          router.replace({
+            pathname: '/(auth)/family-invite',
+            params: { workspaceName: workspace.name, workspaceId: workspace.id },
+          });
+        }
+      } else {
+        // New user - go to workspace setup
+        const userName = user.user_metadata?.name || user.user_metadata?.full_name || '';
+        showSuccessToast('Account Created!', 'Welcome to FamilyKnows');
         setIsGoogleLoading(false);
-        router.replace('/');
-      }, 100);
+        router.replace({
+          pathname: '/(auth)/workspace-setup',
+          params: { userName },
+        });
+      }
 
     } catch (err: any) {
       console.error('[GoogleSignUp] Error:', err);
