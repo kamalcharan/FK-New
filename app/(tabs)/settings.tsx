@@ -70,16 +70,6 @@ export default function SettingsScreen() {
     });
   };
 
-  const handleInviteFamily = () => {
-    router.push({
-      pathname: '/(auth)/family-invite',
-      params: {
-        workspaceName: currentWorkspace?.name || 'Family Vault',
-        workspaceId: currentWorkspace?.id || '',
-      },
-    });
-  };
-
   const handleBackup = () => {
     router.push('/backup');
   };
@@ -112,15 +102,6 @@ export default function SettingsScreen() {
             <View style={styles.settingText}>
               <Text style={styles.settingTitle}>Family Members</Text>
               <Text style={styles.settingDescription}>View and manage members</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-
-          <Pressable style={styles.settingItem} onPress={handleInviteFamily}>
-            <Text style={styles.settingIcon}>➕</Text>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>Invite Family</Text>
-              <Text style={styles.settingDescription}>Add family to {currentWorkspace?.name || 'your vault'}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
