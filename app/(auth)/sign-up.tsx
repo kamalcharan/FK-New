@@ -52,8 +52,6 @@ const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boo
 // Phone OTP auth hidden for now
 // import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
-import { useAppDispatch } from '../../src/hooks/useStore';
-import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 
 export default function SignUpScreen() {
   // Get invite context from verify-invite screen
