@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Contacts from 'expo-contacts';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ArrowLeft, ChevronDown } from 'lucide-react-native';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../src/constants/theme';
 import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '../src/constants/currencies';
 import { countryCodeOptions, getDefaultCountryCode, CountryCode } from '../src/constants/countryCodes';
@@ -250,7 +251,7 @@ This creates a trusted digital handshake between us.
           {/* Header */}
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backIcon}>←</Text>
+              <ArrowLeft size={24} color={Colors.text} />
             </Pressable>
             <Text style={styles.title}>{isGiven ? 'Record Loan Given' : 'Record Loan Taken'}</Text>
           </View>
@@ -307,7 +308,7 @@ This creates a trusted digital handshake between us.
                 <Pressable style={styles.countryCodeButton} onPress={() => setShowCountryCodePicker(true)}>
                   <Text style={styles.countryFlag}>{countryCode.flag}</Text>
                   <Text style={styles.countryDial}>{countryCode.dial}</Text>
-                  <Text style={styles.countryChevron}>▼</Text>
+                  <ChevronDown size={16} color={Colors.textMuted} />
                 </Pressable>
                 <TextInput
                   style={[styles.input, styles.phoneInput]}
@@ -343,7 +344,7 @@ This creates a trusted digital handshake between us.
                 <Pressable style={styles.currencyButton} onPress={() => setShowCurrencyPicker(true)}>
                   <Text style={styles.currencySymbol}>{currencySymbol}</Text>
                   <Text style={styles.currencyCode}>{currency}</Text>
-                  <Text style={styles.currencyChevron}>▼</Text>
+                  <ChevronDown size={16} color={Colors.textMuted} />
                 </Pressable>
                 <TextInput
                   style={[styles.input, styles.amountInput]}
@@ -362,7 +363,7 @@ This creates a trusted digital handshake between us.
               <Pressable style={styles.dateButton} onPress={() => setShowStartDatePicker(true)}>
                 <Text style={styles.dateIcon}>📅</Text>
                 <Text style={styles.dateText}>{formatDate(startDate)}</Text>
-                <Text style={styles.dateChevron}>▼</Text>
+                <ChevronDown size={16} color={Colors.textMuted} />
               </Pressable>
             </View>
 
@@ -376,7 +377,7 @@ This creates a trusted digital handshake between us.
                 >
                   <Text style={styles.dateIcon}>📆</Text>
                   <Text style={styles.dateText}>{dueDate ? formatDate(dueDate) : 'No due date set'}</Text>
-                  <Text style={styles.dateChevron}>▼</Text>
+                  <ChevronDown size={16} color={Colors.textMuted} />
                 </Pressable>
                 {dueDate && (
                   <Pressable style={styles.clearDateButton} onPress={() => setDueDate(null)}>
@@ -617,7 +618,6 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 },
   backButton: { ...GlassStyle, width: 44, height: 44, borderRadius: BorderRadius.lg, alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 20, color: Colors.text },
   title: { ...Typography.h2, color: Colors.text, flex: 1 },
 
   loanTypeToggle: { flexDirection: 'row', gap: 12, marginBottom: 24 },
@@ -652,7 +652,6 @@ const styles = StyleSheet.create({
   countryCodeButton: { ...GlassStyle, borderRadius: BorderRadius.lg, paddingHorizontal: 14, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   countryFlag: { fontSize: 18 },
   countryDial: { ...Typography.body, color: Colors.text },
-  countryChevron: { fontSize: 10, color: Colors.textMuted },
   phoneInput: { flex: 1 },
 
   // Amount row
@@ -660,14 +659,12 @@ const styles = StyleSheet.create({
   currencyButton: { ...GlassStyle, borderRadius: BorderRadius.lg, paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   currencySymbol: { fontSize: 18, color: Colors.text },
   currencyCode: { ...Typography.bodySm, color: Colors.textMuted },
-  currencyChevron: { fontSize: 10, color: Colors.textMuted },
   amountInput: { flex: 1 },
 
   // Date buttons
   dateButton: { ...GlassStyle, borderRadius: BorderRadius.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   dateIcon: { fontSize: 18 },
   dateText: { ...Typography.body, color: Colors.text, flex: 1 },
-  dateChevron: { fontSize: 10, color: Colors.textMuted },
   dueDateRow: { flexDirection: 'row', gap: 12 },
   dueDateButton: { flex: 1 },
   clearDateButton: { ...GlassStyle, borderRadius: BorderRadius.lg, width: 52, alignItems: 'center', justifyContent: 'center' },

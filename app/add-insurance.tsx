@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../src/constants/theme';
 
 const INSURANCE_TYPES = [
@@ -30,7 +31,7 @@ export default function AddInsuranceScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <ArrowLeft size={24} color={Colors.text} />
           </Pressable>
           <Text style={styles.title}>Add Insurance</Text>
         </View>
@@ -102,7 +103,6 @@ const styles = StyleSheet.create({
   content: { padding: 24, paddingBottom: 120 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 32 },
   backButton: { ...GlassStyle, width: 44, height: 44, borderRadius: BorderRadius.lg, alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 20, color: Colors.text },
   title: { ...Typography.h2, color: Colors.text, flex: 1 },
   label: { fontSize: 10, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, letterSpacing: 1.5, marginBottom: 12 },
   typeGrid: { flexDirection: 'row', gap: 12, marginBottom: 32 },

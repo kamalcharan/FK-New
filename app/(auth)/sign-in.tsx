@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { signInWithPassword, isSupabaseReady, getWorkspaceForUser, getUserProfile, checkFkUserExists } from '../../src/lib/supabase';
-import { isValidPhoneNumber } from '../../src/lib/otp';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setUser } from '../../src/store/slices/authSlice';
@@ -49,7 +49,7 @@ const waitForUserRecords = async (userId: string, maxAttempts = 10): Promise<boo
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();
-  const [identifier, setIdentifier] = useState(''); // email or phone
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,15 +59,9 @@ export default function SignInScreen() {
   // Google Auth hook
   const { request: googleRequest, response: googleResponse, promptAsync: googlePromptAsync, redirectUri } = useGoogleAuth();
 
-  // Detect if input is phone or email
-  const isPhone = /^\d+$/.test(identifier.replace(/\D/g, '')) && identifier.length <= 12;
-  const isEmail = identifier.includes('@');
-
   // Validation
-  const isIdentifierValid = isEmail
-    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)
-    : isValidPhoneNumber(identifier);
-  const isFormValid = isIdentifierValid && password.length >= 8;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isFormValid = isEmailValid && password.length >= 8;
 
   const handleSignIn = async () => {
     if (!isFormValid) return;
@@ -82,7 +76,7 @@ export default function SignInScreen() {
         return;
       }
 
-      const { user, session } = await signInWithPassword(identifier, password);
+      const { user, session } = await signInWithPassword(email, password);
 
       if (user) {
         // Update Redux with user info
@@ -272,27 +266,22 @@ export default function SignInScreen() {
 
           {/* Form */}
           <View style={styles.form}>
-            {/* Email or Phone */}
+            {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>EMAIL OR PHONE</Text>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
               <TextInput
-                value={identifier}
+                value={email}
                 onChangeText={(text) => {
-                  setIdentifier(text.trim());
+                  setEmail(text.toLowerCase().trim());
                   setError('');
                 }}
-                placeholder="Enter email or phone number"
+                placeholder="Enter your email address"
                 placeholderTextColor={Colors.textPlaceholder}
-                keyboardType={isPhone ? 'phone-pad' : 'email-address'}
+                keyboardType="email-address"
                 autoCapitalize="none"
-                autoComplete="username"
+                autoComplete="email"
                 style={styles.input}
               />
-              {identifier.length > 0 && (
-                <Text style={styles.hint}>
-                  {isPhone ? '📱 Signing in with phone' : '✉️ Signing in with email'}
-                </Text>
-              )}
             </View>
 
             {/* Password */}
@@ -315,9 +304,11 @@ export default function SignInScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.showButton}
                 >
-                  <Text style={styles.showButtonText}>
-                    {showPassword ? 'Hide' : 'Show'}
-                  </Text>
+                  {showPassword ? (
+                    <EyeOff size={20} color={Colors.textMuted} />
+                  ) : (
+                    <Eye size={20} color={Colors.textMuted} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -442,11 +433,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.text,
   },
-  hint: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
   passwordContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.inputBackground,
@@ -464,10 +450,6 @@ const styles = StyleSheet.create({
   showButton: {
     justifyContent: 'center',
     paddingHorizontal: 16,
-  },
-  showButtonText: {
-    ...Typography.bodySm,
-    color: Colors.primary,
   },
   forgotButton: {
     alignSelf: 'flex-end',

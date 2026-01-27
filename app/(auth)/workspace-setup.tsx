@@ -163,7 +163,6 @@ export default function WorkspaceSetupScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.form}>
-<<<<<<< HEAD
         {showJoinForm ? (
           <>
             {/* Invite Code Input */}
@@ -196,34 +195,6 @@ export default function WorkspaceSetupScreen() {
               disabled={!inviteCode.trim() || isLoading}
               loading={isLoading}
             />
-=======
-        {/* Vault Name Input */}
-        <View>
-          <Text style={styles.label}>VAULT NAME</Text>
-          <TextInput
-            style={[
-              styles.input,
-              isFocused ? styles.inputFocused : null,
-            ]}
-            placeholder="e.g. The Sharma Family"
-            placeholderTextColor={Colors.textPlaceholder}
-            value={vaultName}
-            onChangeText={setVaultName}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            autoCapitalize="words"
-            autoCorrect={false}
-          />
-        </View>
-
-        {/* Create Button */}
-        <Button
-          title="Create Workspace"
-          variant="primary"
-          onPress={handleCreateWorkspace}
-          disabled={vaultName.trim().length === 0}
-        />
->>>>>>> e51ab87c260baf05487450f78c7ff55578f078b9
 
             {/* Back to Create */}
             <Button
