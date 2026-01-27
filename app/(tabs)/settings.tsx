@@ -1,16 +1,60 @@
 // app/(tabs)/settings.tsx
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
 import { Colors, Typography, GlassStyle, BorderRadius } from '../../src/constants/theme';
 import { useAppDispatch, useAppSelector } from '../../src/hooks/useStore';
 import { logout } from '../../src/store/slices/authSlice';
 import { clearWorkspace } from '../../src/store/slices/workspaceSlice';
-import { signOut } from '../../src/lib/supabase';
+import { signOut, toggleDemoMode, isDemoModeEnabled, isSupabaseReady } from '../../src/lib/supabase';
 
 export default function SettingsScreen() {
   const dispatch = useAppDispatch();
   const { currentWorkspace } = useAppSelector(state => state.workspace);
+  const { user } = useAppSelector(state => state.auth);
+
+  const [demoEnabled, setDemoEnabled] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  // Load demo mode status on mount
+  useEffect(() => {
+    const loadDemoStatus = async () => {
+      if (!user?.id || !isSupabaseReady()) return;
+      try {
+        const enabled = await isDemoModeEnabled(user.id);
+        setDemoEnabled(enabled);
+      } catch (err) {
+        console.error('Error loading demo status:', err);
+      }
+    };
+    loadDemoStatus();
+  }, [user?.id]);
+
+  const handleToggleDemoMode = useCallback(async () => {
+    if (!currentWorkspace?.id || !user?.id || demoLoading) return;
+
+    const newValue = !demoEnabled;
+    setDemoLoading(true);
+
+    try {
+      const result = await toggleDemoMode(currentWorkspace.id, user.id, newValue);
+      if (result.success) {
+        setDemoEnabled(newValue);
+        Alert.alert(
+          newValue ? 'Demo Mode Enabled' : 'Demo Mode Disabled',
+          result.message,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', result.message);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to toggle demo mode');
+    } finally {
+      setDemoLoading(false);
+    }
+  }, [currentWorkspace?.id, user?.id, demoEnabled, demoLoading]);
 
   const handleViewMembers = () => {
     router.push({
@@ -68,16 +112,22 @@ export default function SettingsScreen() {
             <Text style={styles.chevron}>›</Text>
           </Pressable>
 
-          <View style={styles.settingItem}>
+          <Pressable style={styles.settingItem} onPress={handleToggleDemoMode} disabled={demoLoading}>
             <Text style={styles.settingIcon}>✨</Text>
             <View style={styles.settingText}>
               <Text style={styles.settingTitle}>Demo Mode</Text>
-              <Text style={styles.settingDescription}>Populate with example records</Text>
+              <Text style={styles.settingDescription}>
+                {demoEnabled ? 'Sample records are showing' : 'Populate with example records'}
+              </Text>
             </View>
-            <View style={styles.toggle}>
-              <View style={styles.toggleKnob} />
-            </View>
-          </View>
+            {demoLoading ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <View style={[styles.toggle, demoEnabled && styles.toggleActive]}>
+                <View style={[styles.toggleKnob, demoEnabled && styles.toggleKnobActive]} />
+              </View>
+            )}
+          </Pressable>
 
           <Pressable style={styles.settingItem} onPress={handleBackup}>
             <Text style={styles.settingIcon}>☁️</Text>
@@ -168,11 +218,18 @@ const styles = StyleSheet.create({
     padding: 4,
     justifyContent: 'center',
   },
+  toggleActive: {
+    backgroundColor: Colors.primary,
+  },
   toggleKnob: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: Colors.textMuted,
+  },
+  toggleKnobActive: {
+    backgroundColor: Colors.text,
+    alignSelf: 'flex-end',
   },
   logoutItem: {
     marginTop: 12,

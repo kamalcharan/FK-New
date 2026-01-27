@@ -604,3 +604,126 @@ export const revokeInvite = async (
   if (error) throw error;
   return data?.[0] || { success: false, error_message: 'Unknown error' };
 };
+
+// ============================================
+// Dashboard & Demo Mode Functions
+// ============================================
+
+export interface DashboardStats {
+  total_loans_given: number;
+  total_loans_taken: number;
+  loans_given_count: number;
+  loans_taken_count: number;
+  pending_verification: number;
+  active_policies: number;
+  expiring_soon_policies: number;
+  upcoming_renewals: number;
+  overdue_renewals: number;
+}
+
+export const getDashboardStats = async (workspaceId: string): Promise<DashboardStats | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('get_dashboard_stats', {
+    p_workspace_id: workspaceId,
+  });
+
+  if (error) throw error;
+  return data?.[0] || null;
+};
+
+export const toggleDemoMode = async (
+  workspaceId: string,
+  userId: string,
+  enable: boolean
+): Promise<{ success: boolean; message: string }> => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase.rpc('toggle_demo_mode', {
+    p_workspace_id: workspaceId,
+    p_user_id: userId,
+    p_enable: enable,
+  });
+
+  if (error) throw error;
+  return data?.[0] || { success: false, message: 'Unknown error' };
+};
+
+export const isDemoModeEnabled = async (userId: string): Promise<boolean> => {
+  if (!supabase) return false;
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .select('demo_mode_enabled')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) return false;
+  return data?.demo_mode_enabled || false;
+};
+
+// Get upcoming alerts (policies/renewals expiring soon)
+export interface UpcomingAlert {
+  id: string;
+  type: 'insurance' | 'renewal';
+  title: string;
+  subtitle: string;
+  daysLeft: number;
+  expiryDate: string;
+}
+
+export const getUpcomingAlerts = async (workspaceId: string): Promise<UpcomingAlert[]> => {
+  if (!supabase) return [];
+
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+  const [policiesResult, renewalsResult] = await Promise.all([
+    supabase
+      .from('fk_insurance_policies')
+      .select('id, policy_type, provider_name, insured_name, expiry_date')
+      .eq('workspace_id', workspaceId)
+      .lte('expiry_date', thirtyDaysFromNow.toISOString())
+      .gte('expiry_date', new Date().toISOString())
+      .order('expiry_date', { ascending: true })
+      .limit(5),
+    supabase
+      .from('fk_renewals')
+      .select('id, renewal_type, title, expiry_date')
+      .eq('workspace_id', workspaceId)
+      .lte('expiry_date', thirtyDaysFromNow.toISOString())
+      .order('expiry_date', { ascending: true })
+      .limit(5),
+  ]);
+
+  const alerts: UpcomingAlert[] = [];
+
+  // Add policy alerts
+  for (const policy of policiesResult.data || []) {
+    const daysLeft = Math.ceil((new Date(policy.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    alerts.push({
+      id: policy.id,
+      type: 'insurance',
+      title: `${policy.provider_name} - ${policy.insured_name}`,
+      subtitle: policy.policy_type,
+      daysLeft,
+      expiryDate: policy.expiry_date,
+    });
+  }
+
+  // Add renewal alerts
+  for (const renewal of renewalsResult.data || []) {
+    const daysLeft = Math.ceil((new Date(renewal.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    alerts.push({
+      id: renewal.id,
+      type: 'renewal',
+      title: renewal.title,
+      subtitle: renewal.renewal_type,
+      daysLeft,
+      expiryDate: renewal.expiry_date,
+    });
+  }
+
+  // Sort by days left
+  return alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+};
