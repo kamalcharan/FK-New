@@ -34,12 +34,12 @@ const discovery = {
 
 // Scopes we need:
 // - openid, profile, email: Standard OAuth scopes for user info
-// - drive.file: Access to files created by the app (for backup/restore)
+// - drive.file: Access to files created by the app (for backup/restore) - ADD LATER after verification
 const SCOPES = [
   'openid',
   'profile',
   'email',
-  'https://www.googleapis.com/auth/drive.file', // Only access files created by the app
+  // 'https://www.googleapis.com/auth/drive.file', // Temporarily disabled - requires app verification
 ];
 
 // Check if running in Expo Go
