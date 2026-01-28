@@ -9,7 +9,7 @@
     "scheme": "familyknows",
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#0F172A"
     },
     "ios": {

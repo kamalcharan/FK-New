@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { useEffect, useState, useRef } from 'react';
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator } from 'react-native';
@@ -12,21 +12,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { store } from '../src/store';
 import { Colors } from '../src/constants/theme';
-import { SplashScreen } from '../src/components/SplashScreen';
 import { toastConfig } from '../src/components/ToastConfig';
-import { supabase, isSupabaseReady } from '../src/lib/supabase';
 
-// Prevent native splash screen from auto-hiding
+// Prevent native splash screen from auto-hiding until we're ready
 NativeSplashScreen.preventAutoHideAsync();
 
-// Track if splash has been shown in this app session (persists across re-renders)
-let splashShownInSession = false;
-
 export default function RootLayout() {
-  const [showCustomSplash, setShowCustomSplash] = useState(!splashShownInSession);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const hasCheckedAuth = useRef(false);
-
   const [fontsLoaded, fontError] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -34,40 +25,14 @@ export default function RootLayout() {
     Fraunces_600SemiBold,
   });
 
-  // Check if user is already authenticated - skip splash for returning users
   useEffect(() => {
-    if (hasCheckedAuth.current) return;
-    hasCheckedAuth.current = true;
-
-    const checkExistingSession = async () => {
-      try {
-        if (isSupabaseReady() && supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            // User is already logged in - skip splash
-            console.log('[Layout] Existing session found, skipping splash');
-            splashShownInSession = true;
-            setShowCustomSplash(false);
-          }
-        }
-      } catch (error) {
-        console.log('[Layout] Error checking session:', error);
-      } finally {
-        setCheckingAuth(false);
-      }
-    };
-
-    checkExistingSession();
-  }, []);
-
-  useEffect(() => {
-    if ((fontsLoaded || fontError) && !checkingAuth) {
-      // Hide native splash once fonts are loaded and auth is checked
+    if (fontsLoaded || fontError) {
+      // Hide native splash once fonts are loaded
       NativeSplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, checkingAuth]);
+  }, [fontsLoaded, fontError]);
 
-  // Show loading while fonts load or checking auth
+  // Show loading while fonts load
   if (!fontsLoaded && !fontError) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
@@ -84,25 +49,6 @@ export default function RootLayout() {
           Font loading error: {fontError.message}
         </Text>
       </View>
-    );
-  }
-
-  // Still checking auth - show brief loading
-  if (checkingAuth) {
-    return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  // Show custom splash with tagline (only for fresh app opens, not returning users)
-  if (showCustomSplash) {
-    return (
-      <SplashScreen onFinish={() => {
-        splashShownInSession = true;
-        setShowCustomSplash(false);
-      }} />
     );
   }
 
