@@ -1,17 +1,17 @@
 // app/family-members.tsx
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { showSuccessToast, showErrorToast } from '../src/components/ToastConfig';
+import { useAppSelector } from '../src/store';
 import {
   getWorkspaceMembersWithDetails,
   getWorkspaceInvites,
   removeWorkspaceMember,
   revokeInvite,
-  getCurrentUser,
   isSupabaseReady,
   WorkspaceMember,
 } from '../src/lib/supabase';
@@ -29,14 +29,15 @@ interface PendingInvite {
 }
 
 export default function FamilyMembersScreen() {
-  const { workspaceId, workspaceName } = useLocalSearchParams<{
-    workspaceId: string;
-    workspaceName: string;
-  }>();
+  const { currentWorkspace } = useAppSelector(state => state.workspace);
+  const { user } = useAppSelector(state => state.auth);
+
+  // Use Redux state for workspace
+  const workspaceId = currentWorkspace?.id;
+  const workspaceName = currentWorkspace?.name;
 
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,9 +49,6 @@ export default function FamilyMembersScreen() {
     }
 
     try {
-      const user = await getCurrentUser();
-      setCurrentUserId(user?.id || null);
-
       const [membersData, invitesData] = await Promise.all([
         getWorkspaceMembersWithDetails(workspaceId),
         getWorkspaceInvites(workspaceId),
@@ -72,7 +70,7 @@ export default function FamilyMembersScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, user?.id]);
 
   useEffect(() => {
     loadData();
@@ -90,7 +88,7 @@ export default function FamilyMembersScreen() {
       return;
     }
 
-    const isSelf = member.user_id === currentUserId;
+    const isSelf = member.user_id === user?.id;
     const title = isSelf ? 'Leave Family?' : `Remove ${member.full_name}?`;
     const message = isSelf
       ? 'You will no longer have access to this family workspace.'
@@ -102,13 +100,13 @@ export default function FamilyMembersScreen() {
         text: isSelf ? 'Leave' : 'Remove',
         style: 'destructive',
         onPress: async () => {
-          if (!currentUserId || !workspaceId) return;
+          if (!user?.id || !workspaceId) return;
 
           try {
             const result = await removeWorkspaceMember(
               workspaceId,
               member.user_id,
-              currentUserId
+              user?.id
             );
 
             if (result.success) {
@@ -142,10 +140,10 @@ export default function FamilyMembersScreen() {
         text: 'Revoke',
         style: 'destructive',
         onPress: async () => {
-          if (!currentUserId) return;
+          if (!user?.id) return;
 
           try {
-            const result = await revokeInvite(invite.id, currentUserId);
+            const result = await revokeInvite(invite.id, user?.id);
 
             if (result.success) {
               showSuccessToast('Invite Revoked', `Invite for ${name} cancelled`);
@@ -224,7 +222,7 @@ export default function FamilyMembersScreen() {
               </View>
 
               {/* Remove button - only owner can remove others, anyone can remove self */}
-              {!member.is_owner && (isOwner || member.user_id === currentUserId) && (
+              {!member.is_owner && (isOwner || member.user_id === user?.id) && (
                 <Pressable
                   style={styles.removeButton}
                   onPress={() => handleRemoveMember(member)}

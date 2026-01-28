@@ -765,7 +765,7 @@ export default function AddRenewalScreen() {
             placeholderTextColor={Colors.textMuted}
             keyboardType="numeric"
           />
-          {currentPreset?.cost_range_min !== null && currentPreset?.cost_range_max !== null && (
+          {currentPreset && currentPreset.cost_range_min != null && currentPreset.cost_range_max != null && (
             <Text style={styles.costHint}>
               Typical: {formatCostRange(currentPreset.cost_range_min, currentPreset.cost_range_max)}
             </Text>
