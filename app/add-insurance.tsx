@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { showSuccessToast, showErrorToast } from '../src/components/ToastConfig';
-import { useWorkspace } from '../src/contexts/WorkspaceContext';
+import { useAppSelector } from '../src/store';
 import {
   getInsuranceTypesWithSubtypes,
   getWorkspaceMembersWithDetails,
@@ -59,7 +59,7 @@ interface SelectedMember {
 
 export default function AddInsuranceScreen() {
   const router = useRouter();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace } = useAppSelector(state => state.workspace);
 
   // Step management
   const [step, setStep] = useState<Step>('type');

@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../../src/constants/theme';
-import { useWorkspace } from '../../src/contexts/WorkspaceContext';
+import { useAppSelector } from '../../src/store';
 import {
   getInsurancePoliciesWithMembers,
   getRenewals,
@@ -50,7 +50,7 @@ interface Renewal {
 
 export default function VaultScreen() {
   const router = useRouter();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace } = useAppSelector(state => state.workspace);
 
   const [policies, setPolicies] = useState<InsurancePolicyWithMembers[]>([]);
   const [renewals, setRenewals] = useState<Renewal[]>([]);

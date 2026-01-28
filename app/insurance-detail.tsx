@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { showSuccessToast, showErrorToast } from '../src/components/ToastConfig';
-import { useWorkspace } from '../src/contexts/WorkspaceContext';
+import { useAppSelector } from '../src/store';
 import {
   getInsurancePoliciesWithMembers,
   deleteInsurancePolicy,
@@ -29,7 +29,7 @@ import {
 export default function InsuranceDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace } = useAppSelector(state => state.workspace);
 
   const [policy, setPolicy] = useState<InsurancePolicyWithMembers | null>(null);
   const [isLoading, setIsLoading] = useState(true);
