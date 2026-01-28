@@ -731,14 +731,18 @@ export const getRenewals = async (workspaceId: string) => {
 export const createRenewal = async (renewal: {
   workspace_id: string;
   created_by: string;
-  renewal_type: string;
   title: string;
+  expiry_date: string;
+  renewal_type?: string;
+  category?: string;
+  subcategory?: string;
   authority_name?: string;
   reference_number?: string;
   property_address?: string;
   fee_amount?: number;
   issue_date?: string;
-  expiry_date: string;
+  frequency_months?: number;
+  preset_code?: string;
   notes?: string;
 }) => {
   if (!supabase) throw new Error('Supabase not configured');
@@ -751,6 +755,240 @@ export const createRenewal = async (renewal: {
 
   if (error) throw error;
   return data;
+};
+
+export const getRenewalById = async (renewalId: string) => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_renewals')
+    .select('*')
+    .eq('id', renewalId)
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateRenewal = async (
+  renewalId: string,
+  updates: {
+    title?: string;
+    authority_name?: string;
+    reference_number?: string;
+    property_address?: string;
+    fee_amount?: number;
+    issue_date?: string;
+    expiry_date?: string;
+    status?: 'active' | 'renewed' | 'expired';
+    notes?: string;
+    category?: string;
+    subcategory?: string;
+    frequency_months?: number;
+  }
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_renewals')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', renewalId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const deleteRenewal = async (renewalId: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { error } = await supabase
+    .from('fk_renewals')
+    .delete()
+    .eq('id', renewalId);
+
+  if (error) throw error;
+  return { success: true };
+};
+
+export const markRenewalAsRenewed = async (
+  renewalId: string,
+  newExpiryDate: string,
+  newReferenceNumber?: string,
+  costPaid?: number,
+  notes?: string
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_renewals')
+    .update({
+      expiry_date: newExpiryDate,
+      reference_number: newReferenceNumber,
+      fee_amount: costPaid,
+      notes: notes,
+      status: 'active',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', renewalId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// ============================================
+// Renewal Master Data Functions
+// ============================================
+
+export interface RenewalPreset {
+  id: string;
+  code: string;
+  title: string;
+  icon: string | null;
+  category: string;
+  subcategory: string | null;
+  authority_template: string | null;
+  frequency_months: number | null;
+  cost_range_min: number | null;
+  cost_range_max: number | null;
+  penalty_info: string | null;
+  documents_required: string[];
+  renewal_process: string | null;
+  applicable_to: string;
+  state_specific: string;
+  sort_order: number;
+}
+
+export interface RenewalBundle {
+  id: string;
+  code: string;
+  title: string;
+  icon: string | null;
+  description: string | null;
+  hook: string | null;
+  preset_codes: string[];
+  sort_order: number;
+}
+
+export interface RenewalStory {
+  id: string;
+  quote: string;
+  consequence: string | null;
+  source: string | null;
+  preset_code: string | null;
+  category: string | null;
+  icon: string | null;
+  sort_order: number;
+}
+
+export const getRenewalPresets = async (options?: {
+  category?: string;
+  state?: string;
+}): Promise<RenewalPreset[]> => {
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('fk_renewal_presets')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (options?.category) {
+    query = query.eq('category', options.category);
+  }
+
+  if (options?.state && options.state !== 'all') {
+    query = query.or(`state_specific.eq.${options.state},state_specific.eq.all`);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const getRenewalPresetByCode = async (code: string): Promise<RenewalPreset | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_renewal_presets')
+    .select('*')
+    .eq('code', code)
+    .single();
+
+  if (error) return null;
+  return data;
+};
+
+export const getRenewalBundles = async (): Promise<RenewalBundle[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('fk_renewal_bundles')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const getRenewalBundleByCode = async (code: string): Promise<RenewalBundle | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_renewal_bundles')
+    .select('*')
+    .eq('code', code)
+    .single();
+
+  if (error) return null;
+  return data;
+};
+
+export const getRenewalStories = async (): Promise<RenewalStory[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('fk_renewal_stories')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const searchRenewalPresets = async (searchTerm: string): Promise<RenewalPreset[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('fk_renewal_presets')
+    .select('*')
+    .eq('is_active', true)
+    .or(`title.ilike.%${searchTerm}%,authority_template.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
+    .order('sort_order', { ascending: true })
+    .limit(10);
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const getPresetsByCategory = async (): Promise<Record<string, RenewalPreset[]>> => {
+  if (!supabase) return {};
+
+  const presets = await getRenewalPresets();
+
+  return presets.reduce((acc, preset) => {
+    if (!acc[preset.category]) {
+      acc[preset.category] = [];
+    }
+    acc[preset.category].push(preset);
+    return acc;
+  }, {} as Record<string, RenewalPreset[]>);
 };
 
 // ============================================
