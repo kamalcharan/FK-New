@@ -80,6 +80,8 @@ export default function RootLayout() {
             <Stack.Screen name="add-loan" options={{ presentation: 'modal' }} />
             <Stack.Screen name="add-insurance" options={{ presentation: 'modal' }} />
             <Stack.Screen name="add-renewal" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="insurance-detail" options={{ presentation: 'card' }} />
+            <Stack.Screen name="family-members" options={{ presentation: 'card' }} />
           </Stack>
           <Toast config={toastConfig} />
         </Provider>
