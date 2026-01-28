@@ -25,6 +25,7 @@ import {
   getRenewalPresets,
   getRenewalPresetByCode,
   createRenewal,
+  getRenewals,
   trackRenewalInterest,
   markInterestConverted,
   getSameCategoryPresets,
@@ -59,10 +60,10 @@ export default function AddRenewalScreen() {
   const [bundles, setBundles] = useState<RenewalBundle[]>([]);
   const [presets, setPresets] = useState<RenewalPreset[]>([]);
   const [presetsByCategory, setPresetsByCategory] = useState<Record<string, RenewalPreset[]>>({});
+  const [existingRenewalCodes, setExistingRenewalCodes] = useState<Set<string>>(new Set());
 
   // Selection state
   const [selectedBundle, setSelectedBundle] = useState<RenewalBundle | null>(null);
-  const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set());
   const [currentPreset, setCurrentPreset] = useState<RenewalPreset | null>(null);
 
   // Form state
@@ -108,15 +109,25 @@ export default function AddRenewalScreen() {
 
   const loadData = async () => {
     try {
-      const [storiesData, bundlesData, presetsData] = await Promise.all([
+      const [storiesData, bundlesData, presetsData, existingRenewals] = await Promise.all([
         getRenewalStories(),
         getRenewalBundles(),
         getRenewalPresets(),
+        currentWorkspace?.id ? getRenewals(currentWorkspace.id) : Promise.resolve([]),
       ]);
 
       setStories(storiesData);
       setBundles(bundlesData);
       setPresets(presetsData);
+
+      // Track existing renewal preset codes for duplicate prevention
+      const existingCodes = new Set<string>();
+      existingRenewals?.forEach((renewal: any) => {
+        if (renewal.preset_code) {
+          existingCodes.add(renewal.preset_code);
+        }
+      });
+      setExistingRenewalCodes(existingCodes);
 
       // Group presets by category
       const grouped = presetsData.reduce((acc, preset) => {
@@ -162,11 +173,9 @@ export default function AddRenewalScreen() {
 
   const handleBundleSelect = (bundle: RenewalBundle) => {
     setSelectedBundle(bundle);
-    // Pre-select all presets in the bundle
-    setSelectedPresets(new Set(bundle.preset_codes));
     setStep('stack');
 
-    // Track interest for all presets in bundle
+    // Track interest for bundle view (not auto-selecting anymore)
     bundle.preset_codes.forEach(code => {
       const preset = presets.find(p => p.code === code);
       if (preset) {
@@ -175,85 +184,17 @@ export default function AddRenewalScreen() {
     });
   };
 
-  const handlePresetToggle = (presetCode: string) => {
-    const newSelected = new Set(selectedPresets);
-    if (newSelected.has(presetCode)) {
-      newSelected.delete(presetCode);
-    } else {
-      newSelected.add(presetCode);
-      // Track interest when selecting a preset (user is showing intent)
-      const preset = presets.find(p => p.code === presetCode);
-      if (preset) {
-        trackInterest(preset, 'view');
-      }
-    }
-    setSelectedPresets(newSelected);
-  };
-
-  const handleAddSelected = async () => {
-    if (selectedPresets.size === 0) return;
-
-    // If only one selected, go to form for that one
-    if (selectedPresets.size === 1) {
-      const presetCode = Array.from(selectedPresets)[0];
-      const preset = presets.find(p => p.code === presetCode);
-      if (preset) {
-        setCurrentPreset(preset);
-        prefillForm(preset);
-        setStep('form');
-      }
-      return;
+  // Single item select - go directly to form
+  const handlePresetSelect = (preset: RenewalPreset) => {
+    // Check if already added
+    if (existingRenewalCodes.has(preset.code)) {
+      return; // Don't allow selecting already-added items
     }
 
-    // Multiple selected - batch add with default dates
-    setIsSaving(true);
-    try {
-      const defaultExpiry = new Date();
-      defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
-      let lastCategory: string | null = null;
-
-      for (const presetCode of selectedPresets) {
-        const preset = presets.find(p => p.code === presetCode);
-        if (preset && currentWorkspace?.id && user?.id) {
-          await createRenewal({
-            workspace_id: currentWorkspace.id,
-            created_by: user.id,
-            title: preset.title,
-            category: preset.category,
-            subcategory: preset.subcategory || undefined,
-            authority_name: preset.authority_template || undefined,
-            preset_code: preset.code,
-            frequency_months: preset.frequency_months || undefined,
-            expiry_date: defaultExpiry.toISOString().split('T')[0],
-          });
-
-          // Mark interest as converted
-          await markInterestConverted(currentWorkspace.id, presetCode);
-          lastCategory = preset.category;
-        }
-      }
-
-      // After batch add, check for same-category suggestions
-      if (lastCategory && currentWorkspace?.id) {
-        const addedCodes = Array.from(selectedPresets);
-        const suggestions = await getSameCategoryPresets(lastCategory, addedCodes[0]);
-        // Filter out any we just added
-        const filteredSuggestions = suggestions.filter(s => !addedCodes.includes(s.code));
-
-        if (filteredSuggestions.length > 0) {
-          setSameCategoryPresets(filteredSuggestions);
-          setLastAddedCategory(lastCategory);
-          setShowSuggestionModal(true);
-          return; // Don't navigate away yet
-        }
-      }
-
-      router.back();
-    } catch (error) {
-      console.error('Error creating renewals:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    trackInterest(preset, 'view');
+    setCurrentPreset(preset);
+    prefillForm(preset);
+    setStep('form');
   };
 
   const handleSaveRenewal = async () => {
@@ -277,18 +218,25 @@ export default function AddRenewalScreen() {
         notes: formData.notes || undefined,
       });
 
-      // Mark interest as converted if we had a preset
+      // Update existing codes to prevent duplicates
       if (currentPreset?.code) {
+        setExistingRenewalCodes(prev => new Set([...prev, currentPreset.code]));
         await markInterestConverted(currentWorkspace.id, currentPreset.code);
 
-        // Fetch same-category suggestions
-        const suggestions = await getSameCategoryPresets(currentPreset.category, currentPreset.code);
-        if (suggestions.length > 0) {
-          setSameCategoryPresets(suggestions);
-          setLastAddedCategory(currentPreset.category);
-          setShowSuggestionModal(true);
-          setIsSaving(false);
-          return; // Don't navigate away yet
+        // If we came from a bundle, suggest remaining bundle items
+        if (selectedBundle) {
+          const remainingBundlePresets = selectedBundle.preset_codes
+            .filter(code => code !== currentPreset.code && !existingRenewalCodes.has(code))
+            .map(code => presets.find(p => p.code === code))
+            .filter(Boolean) as RenewalPreset[];
+
+          if (remainingBundlePresets.length > 0) {
+            setSameCategoryPresets(remainingBundlePresets);
+            setLastAddedCategory(selectedBundle.title);
+            setShowSuggestionModal(true);
+            setIsSaving(false);
+            return; // Don't navigate away yet
+          }
         }
       }
 
@@ -526,20 +474,16 @@ export default function AddRenewalScreen() {
     </ScrollView>
   );
 
-  // Render Stack Builder Step
+  // Render Stack Builder Step - Single item selection
   const renderStackStep = () => {
     // Get presets for selected bundle
     const bundlePresets = selectedBundle?.preset_codes
       .map(code => presets.find(p => p.code === code))
       .filter(Boolean) as RenewalPreset[];
 
-    // Group remaining presets by category for "You might also need"
-    const otherCategories = Object.entries(presetsByCategory)
-      .filter(([category]) => {
-        const bundleCats = bundlePresets?.map(p => p.category) || [];
-        return !bundleCats.includes(category);
-      })
-      .slice(0, 3);
+    // Count how many are already added
+    const addedCount = bundlePresets?.filter(p => existingRenewalCodes.has(p.code)).length || 0;
+    const availableCount = (bundlePresets?.length || 0) - addedCount;
 
     return (
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.stepContent}>
@@ -555,89 +499,69 @@ export default function AddRenewalScreen() {
               </View>
             </View>
 
-            <Text style={styles.sectionLabel}>RECOMMENDED</Text>
+            <Text style={styles.sectionLabel}>
+              SELECT ONE TO ADD {addedCount > 0 && `(${addedCount} already tracking)`}
+            </Text>
             <View style={styles.presetList}>
-              {bundlePresets?.map((preset) => (
-                <Pressable
-                  key={preset.code}
-                  style={[
-                    styles.presetCard,
-                    selectedPresets.has(preset.code) && styles.presetCardSelected,
-                  ]}
-                  onPress={() => handlePresetToggle(preset.code)}
-                >
-                  <View style={styles.presetCheckbox}>
-                    {selectedPresets.has(preset.code) ? (
-                      <Ionicons name="checkbox" size={24} color={Colors.primary} />
-                    ) : (
-                      <Ionicons name="square-outline" size={24} color={Colors.textMuted} />
-                    )}
-                  </View>
-                  <View style={styles.presetInfo}>
-                    <View style={styles.presetHeader}>
-                      <Text style={styles.presetIcon}>{preset.icon}</Text>
-                      <Text style={styles.presetTitle}>{preset.title}</Text>
-                    </View>
-                    <View style={styles.presetMeta}>
-                      {preset.frequency_months && (
-                        <Text style={styles.presetFrequency}>
-                          {preset.frequency_months >= 12
-                            ? `${preset.frequency_months / 12}yr`
-                            : `${preset.frequency_months}mo`}
-                        </Text>
-                      )}
-                      <Text style={styles.presetCost}>
-                        {formatCostRange(preset.cost_range_min, preset.cost_range_max)}
-                      </Text>
-                    </View>
-                    {preset.penalty_info && (
-                      <Text style={styles.presetPenalty}>⚠️ {preset.penalty_info}</Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Other categories */}
-        {otherCategories.length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>YOU MIGHT ALSO NEED</Text>
-            {otherCategories.map(([category, categoryPresets]) => (
-              <View key={category} style={styles.categorySection}>
-                <View style={styles.categoryHeader}>
-                  <Text style={styles.categoryIcon}>
-                    {CATEGORY_INFO[category as keyof typeof CATEGORY_INFO]?.icon || '📋'}
-                  </Text>
-                  <Text style={styles.categoryTitle}>
-                    {CATEGORY_INFO[category as keyof typeof CATEGORY_INFO]?.label || category}
-                  </Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.categoryChips}>
-                    {categoryPresets.slice(0, 5).map((preset) => (
-                      <Pressable
-                        key={preset.code}
-                        style={[
-                          styles.chipCard,
-                          selectedPresets.has(preset.code) && styles.chipCardSelected,
-                        ]}
-                        onPress={() => handlePresetToggle(preset.code)}
-                      >
-                        <Text style={styles.chipIcon}>{preset.icon}</Text>
-                        <Text style={styles.chipTitle} numberOfLines={1}>
+              {bundlePresets?.map((preset) => {
+                const isAlreadyAdded = existingRenewalCodes.has(preset.code);
+                return (
+                  <Pressable
+                    key={preset.code}
+                    style={[
+                      styles.presetCard,
+                      isAlreadyAdded && styles.presetCardDisabled,
+                    ]}
+                    onPress={() => !isAlreadyAdded && handlePresetSelect(preset)}
+                    disabled={isAlreadyAdded}
+                  >
+                    <View style={styles.presetInfo}>
+                      <View style={styles.presetHeader}>
+                        <Text style={styles.presetIcon}>{preset.icon}</Text>
+                        <Text style={[styles.presetTitle, isAlreadyAdded && styles.presetTitleDisabled]}>
                           {preset.title}
                         </Text>
-                        {selectedPresets.has(preset.code) && (
-                          <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                        {isAlreadyAdded && (
+                          <View style={styles.addedBadge}>
+                            <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
+                            <Text style={styles.addedBadgeText}>Added</Text>
+                          </View>
                         )}
-                      </Pressable>
-                    ))}
-                  </View>
-                </ScrollView>
+                      </View>
+                      <View style={styles.presetMeta}>
+                        {preset.frequency_months && (
+                          <Text style={[styles.presetFrequency, isAlreadyAdded && styles.presetMetaDisabled]}>
+                            {preset.frequency_months >= 12
+                              ? `${preset.frequency_months / 12}yr`
+                              : `${preset.frequency_months}mo`}
+                          </Text>
+                        )}
+                        <Text style={[styles.presetCost, isAlreadyAdded && styles.presetMetaDisabled]}>
+                          {formatCostRange(preset.cost_range_min, preset.cost_range_max)}
+                        </Text>
+                      </View>
+                      {preset.penalty_info && !isAlreadyAdded && (
+                        <Text style={styles.presetPenalty}>⚠️ {preset.penalty_info}</Text>
+                      )}
+                    </View>
+                    {!isAlreadyAdded && (
+                      <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* All added state */}
+            {availableCount === 0 && addedCount > 0 && (
+              <View style={styles.allAddedCard}>
+                <Text style={styles.allAddedIcon}>✅</Text>
+                <Text style={styles.allAddedTitle}>All set!</Text>
+                <Text style={styles.allAddedSubtitle}>
+                  You're already tracking all items from this bundle
+                </Text>
               </View>
-            ))}
+            )}
           </>
         )}
 
@@ -646,29 +570,6 @@ export default function AddRenewalScreen() {
           <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
           <Text style={styles.addCustomText}>Add something else</Text>
         </Pressable>
-
-        {/* Bottom action */}
-        <View style={styles.bottomActions}>
-          <Text style={styles.selectedCount}>
-            {selectedPresets.size} selected
-          </Text>
-          <Pressable
-            style={[
-              styles.continueButton,
-              selectedPresets.size === 0 && styles.continueButtonDisabled,
-            ]}
-            onPress={handleAddSelected}
-            disabled={selectedPresets.size === 0 || isSaving}
-          >
-            {isSaving ? (
-              <ActivityIndicator color="#000" size="small" />
-            ) : (
-              <Text style={styles.continueButtonText}>
-                {selectedPresets.size === 1 ? 'Continue' : `Add ${selectedPresets.size} renewals`}
-              </Text>
-            )}
-          </Pressable>
-        </View>
       </ScrollView>
     );
   };
@@ -833,9 +734,9 @@ export default function AddRenewalScreen() {
 
           <View style={styles.modalContent}>
             <Text style={styles.modalIcon}>🎯</Text>
-            <Text style={styles.modalTitle}>You might also need...</Text>
+            <Text style={styles.modalTitle}>Saved! Add another?</Text>
             <Text style={styles.modalSubtitle}>
-              Since you added a {lastAddedCategory} renewal, here are related items
+              Here are other items from {lastAddedCategory}
             </Text>
 
             <ScrollView style={styles.suggestionsList} showsVerticalScrollIndicator={false}>
@@ -899,10 +800,12 @@ export default function AddRenewalScreen() {
         <Pressable
           style={styles.backButton}
           onPress={() => {
-            if (step === 'form' && selectedPresets.size > 0) {
+            if (step === 'form' && selectedBundle) {
               setStep('stack');
+              setCurrentPreset(null);
             } else if (step === 'stack') {
               setStep('persona');
+              setSelectedBundle(null);
             } else if (step === 'persona' && params.showStories === 'true') {
               setStep('stories');
             } else {
@@ -1154,7 +1057,7 @@ const styles = StyleSheet.create({
   },
   presetCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     ...GlassStyle,
     borderRadius: BorderRadius.xl,
     padding: Spacing.md,
@@ -1202,6 +1105,53 @@ const styles = StyleSheet.create({
     ...Typography.bodySm,
     color: Colors.warning,
     marginTop: 4,
+  },
+  presetCardDisabled: {
+    opacity: 0.6,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  presetTitleDisabled: {
+    color: Colors.textMuted,
+  },
+  presetMetaDisabled: {
+    color: Colors.textMuted,
+    opacity: 0.7,
+  },
+  addedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  addedBadgeText: {
+    ...Typography.caption,
+    color: '#22c55e',
+    fontWeight: '600',
+  },
+  allAddedCard: {
+    ...GlassStyle,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  allAddedIcon: {
+    fontSize: 40,
+    marginBottom: Spacing.md,
+  },
+  allAddedTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+  },
+  allAddedSubtitle: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
   categorySection: {
     marginBottom: Spacing.lg,
