@@ -435,6 +435,81 @@ export const updateLoan = async (id: string, updates: Partial<{
 // Insurance Policy Functions
 // ============================================
 
+export interface InsuranceTypeWithSubtypes {
+  type_code: string;
+  type_name: string;
+  type_icon: string;
+  subtypes: {
+    code: string;
+    name: string;
+    icon: string;
+    description: string;
+  }[];
+}
+
+export interface InsurancePolicyWithMembers {
+  id: string;
+  workspace_id: string;
+  policy_type: string;
+  subtype: string | null;
+  subtype_name: string;
+  subtype_icon: string;
+  policy_number: string | null;
+  provider_name: string;
+  scheme_name: string | null;
+  sum_insured: number | null;
+  premium_amount: number | null;
+  premium_frequency: string | null;
+  start_date: string | null;
+  expiry_date: string;
+  status: string;
+  document_url: string | null;
+  tpa_name: string | null;
+  tpa_helpline: string | null;
+  agent_name: string | null;
+  agent_phone: string | null;
+  notes: string | null;
+  metadata: Record<string, any> | null;
+  is_demo: boolean;
+  created_at: string;
+  days_until_expiry: number;
+  covered_members: {
+    id: string;
+    member_id: string | null;
+    invite_id: string | null;
+    custom_name: string | null;
+    relationship_label: string | null;
+    relationship_icon: string | null;
+    full_name: string;
+    is_joined: boolean;
+    is_pending: boolean;
+    is_external: boolean;
+  }[];
+}
+
+// Get all insurance types with their subtypes
+export const getInsuranceTypesWithSubtypes = async (): Promise<InsuranceTypeWithSubtypes[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('get_insurance_types_with_subtypes');
+
+  if (error) throw error;
+  return data || [];
+};
+
+// Get insurance policies with covered members (uses new RPC function)
+export const getInsurancePoliciesWithMembers = async (workspaceId: string): Promise<InsurancePolicyWithMembers[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('get_insurance_policies_with_members', {
+    p_workspace_id: workspaceId,
+  });
+
+  if (error) throw error;
+  return data || [];
+};
+
+// Legacy function - keep for backward compatibility
 export const getInsurancePolicies = async (workspaceId: string) => {
   if (!supabase) return [];
 
@@ -448,13 +523,80 @@ export const getInsurancePolicies = async (workspaceId: string) => {
   return data;
 };
 
+// Create insurance policy with covered members
+export const createInsurancePolicyWithMembers = async (
+  policy: {
+    workspace_id: string;
+    created_by: string;
+    policy_type: string;
+    subtype?: string;
+    policy_number?: string;
+    provider_name: string;
+    scheme_name?: string;
+    premium_amount?: number;
+    premium_frequency?: string;
+    sum_insured?: number;
+    start_date?: string;
+    expiry_date: string;
+    tpa_name?: string;
+    tpa_helpline?: string;
+    agent_name?: string;
+    agent_phone?: string;
+    notes?: string;
+    metadata?: Record<string, any>;
+  },
+  coveredMembers: {
+    member_id?: string;
+    invite_id?: string;
+    custom_name?: string;
+    relationship_label?: string;
+    relationship_icon?: string;
+  }[]
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Create the policy first
+  const { data: policyData, error: policyError } = await supabase
+    .from('fk_insurance_policies')
+    .insert(policy)
+    .select()
+    .single();
+
+  if (policyError) throw policyError;
+
+  // Add covered members if any
+  if (coveredMembers.length > 0 && policyData) {
+    const membersToInsert = coveredMembers.map(member => ({
+      policy_id: policyData.id,
+      member_id: member.member_id || null,
+      invite_id: member.invite_id || null,
+      custom_name: member.custom_name || null,
+      relationship_label: member.relationship_label || null,
+      relationship_icon: member.relationship_icon || null,
+    }));
+
+    const { error: membersError } = await supabase
+      .from('fk_policy_covered_members')
+      .insert(membersToInsert);
+
+    if (membersError) {
+      // Rollback: delete the policy if members insertion fails
+      await supabase.from('fk_insurance_policies').delete().eq('id', policyData.id);
+      throw membersError;
+    }
+  }
+
+  return policyData;
+};
+
+// Legacy function - keep for backward compatibility
 export const createInsurancePolicy = async (policy: {
   workspace_id: string;
   created_by: string;
   policy_type: string;
   policy_number?: string;
   provider_name: string;
-  insured_name: string;
+  insured_name?: string;
   insured_relation?: string;
   premium_amount?: number;
   sum_insured?: number;
@@ -474,6 +616,99 @@ export const createInsurancePolicy = async (policy: {
 
   if (error) throw error;
   return data;
+};
+
+// Update insurance policy
+export const updateInsurancePolicy = async (
+  policyId: string,
+  updates: Partial<{
+    policy_type: string;
+    subtype: string;
+    policy_number: string;
+    provider_name: string;
+    scheme_name: string;
+    premium_amount: number;
+    premium_frequency: string;
+    sum_insured: number;
+    start_date: string;
+    expiry_date: string;
+    status: string;
+    tpa_name: string;
+    tpa_helpline: string;
+    agent_name: string;
+    agent_phone: string;
+    notes: string;
+    document_url: string;
+    metadata: Record<string, any>;
+  }>
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_insurance_policies')
+    .update(updates)
+    .eq('id', policyId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Delete insurance policy
+export const deleteInsurancePolicy = async (policyId: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { error } = await supabase
+    .from('fk_insurance_policies')
+    .delete()
+    .eq('id', policyId);
+
+  if (error) throw error;
+  return { success: true };
+};
+
+// Add covered member to policy
+export const addPolicyCoveredMember = async (
+  policyId: string,
+  member: {
+    member_id?: string;
+    invite_id?: string;
+    custom_name?: string;
+    relationship_label?: string;
+    relationship_icon?: string;
+  }
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data, error } = await supabase
+    .from('fk_policy_covered_members')
+    .insert({
+      policy_id: policyId,
+      member_id: member.member_id || null,
+      invite_id: member.invite_id || null,
+      custom_name: member.custom_name || null,
+      relationship_label: member.relationship_label || null,
+      relationship_icon: member.relationship_icon || null,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Remove covered member from policy
+export const removePolicyCoveredMember = async (coveredMemberId: string) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { error } = await supabase
+    .from('fk_policy_covered_members')
+    .delete()
+    .eq('id', coveredMemberId);
+
+  if (error) throw error;
+  return { success: true };
 };
 
 // ============================================
