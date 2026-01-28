@@ -992,6 +992,103 @@ export const getPresetsByCategory = async (): Promise<Record<string, RenewalPres
 };
 
 // ============================================
+// Renewal Interest Tracking Functions
+// ============================================
+
+export type InteractionType = 'search' | 'view' | 'bundle_view' | 'suggestion_view';
+
+export interface RenewalInterest {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  preset_code: string;
+  category: string;
+  interaction_type: InteractionType;
+  converted: boolean;
+  converted_at: string | null;
+  source_bundle_code: string | null;
+  created_at: string;
+}
+
+export const trackRenewalInterest = async (
+  workspaceId: string,
+  userId: string,
+  presetCode: string,
+  category: string,
+  interactionType: InteractionType,
+  sourceBundleCode?: string
+): Promise<void> => {
+  if (!supabase) return;
+
+  try {
+    await supabase.from('fk_renewal_interests').insert({
+      workspace_id: workspaceId,
+      user_id: userId,
+      preset_code: presetCode,
+      category: category,
+      interaction_type: interactionType,
+      source_bundle_code: sourceBundleCode || null,
+    });
+  } catch (error) {
+    // Silently fail - interest tracking is not critical
+    console.warn('Failed to track renewal interest:', error);
+  }
+};
+
+export const markInterestConverted = async (
+  workspaceId: string,
+  presetCode: string
+): Promise<void> => {
+  if (!supabase) return;
+
+  try {
+    await supabase.rpc('mark_interest_converted', {
+      p_workspace_id: workspaceId,
+      p_preset_code: presetCode,
+    });
+  } catch (error) {
+    console.warn('Failed to mark interest as converted:', error);
+  }
+};
+
+export const getUnconvertedInterests = async (
+  workspaceId: string
+): Promise<{ preset_code: string; category: string; interaction_count: number }[]> => {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('get_unconverted_interests', {
+      p_workspace_id: workspaceId,
+    });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.warn('Failed to get unconverted interests:', error);
+    return [];
+  }
+};
+
+export const getSameCategoryPresets = async (
+  category: string,
+  excludeCode: string
+): Promise<RenewalPreset[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('fk_renewal_presets')
+    .select('*')
+    .eq('category', category)
+    .eq('is_active', true)
+    .neq('code', excludeCode)
+    .order('sort_order', { ascending: true })
+    .limit(5);
+
+  if (error) return [];
+  return data || [];
+};
+
+// ============================================
 // Family Invite Functions
 // ============================================
 

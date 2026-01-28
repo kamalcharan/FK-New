@@ -12,6 +12,7 @@ import {
   Dimensions,
   Platform,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -24,6 +25,10 @@ import {
   getRenewalPresets,
   getRenewalPresetByCode,
   createRenewal,
+  trackRenewalInterest,
+  markInterestConverted,
+  getSameCategoryPresets,
+  searchRenewalPresets,
   RenewalStory,
   RenewalBundle,
   RenewalPreset,
@@ -69,6 +74,16 @@ export default function AddRenewalScreen() {
     fee_amount: '',
     notes: '',
   });
+
+  // Suggestion modal state
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [sameCategoryPresets, setSameCategoryPresets] = useState<RenewalPreset[]>([]);
+  const [lastAddedCategory, setLastAddedCategory] = useState<string | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<RenewalPreset[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   // Animation
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -128,11 +143,36 @@ export default function AddRenewalScreen() {
     });
   };
 
+  // Track interest when user views/interacts with a preset
+  const trackInterest = useCallback((
+    preset: RenewalPreset,
+    interactionType: 'view' | 'bundle_view' | 'search' | 'suggestion_view',
+    bundleCode?: string
+  ) => {
+    if (!currentWorkspace?.id || !user?.id) return;
+    trackRenewalInterest(
+      currentWorkspace.id,
+      user.id,
+      preset.code,
+      preset.category,
+      interactionType,
+      bundleCode
+    );
+  }, [currentWorkspace?.id, user?.id]);
+
   const handleBundleSelect = (bundle: RenewalBundle) => {
     setSelectedBundle(bundle);
     // Pre-select all presets in the bundle
     setSelectedPresets(new Set(bundle.preset_codes));
     setStep('stack');
+
+    // Track interest for all presets in bundle
+    bundle.preset_codes.forEach(code => {
+      const preset = presets.find(p => p.code === code);
+      if (preset) {
+        trackInterest(preset, 'bundle_view', bundle.code);
+      }
+    });
   };
 
   const handlePresetToggle = (presetCode: string) => {
@@ -141,6 +181,11 @@ export default function AddRenewalScreen() {
       newSelected.delete(presetCode);
     } else {
       newSelected.add(presetCode);
+      // Track interest when selecting a preset (user is showing intent)
+      const preset = presets.find(p => p.code === presetCode);
+      if (preset) {
+        trackInterest(preset, 'view');
+      }
     }
     setSelectedPresets(newSelected);
   };
@@ -165,6 +210,7 @@ export default function AddRenewalScreen() {
     try {
       const defaultExpiry = new Date();
       defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+      let lastCategory: string | null = null;
 
       for (const presetCode of selectedPresets) {
         const preset = presets.find(p => p.code === presetCode);
@@ -180,8 +226,28 @@ export default function AddRenewalScreen() {
             frequency_months: preset.frequency_months || undefined,
             expiry_date: defaultExpiry.toISOString().split('T')[0],
           });
+
+          // Mark interest as converted
+          await markInterestConverted(currentWorkspace.id, presetCode);
+          lastCategory = preset.category;
         }
       }
+
+      // After batch add, check for same-category suggestions
+      if (lastCategory && currentWorkspace?.id) {
+        const addedCodes = Array.from(selectedPresets);
+        const suggestions = await getSameCategoryPresets(lastCategory, addedCodes[0]);
+        // Filter out any we just added
+        const filteredSuggestions = suggestions.filter(s => !addedCodes.includes(s.code));
+
+        if (filteredSuggestions.length > 0) {
+          setSameCategoryPresets(filteredSuggestions);
+          setLastAddedCategory(lastCategory);
+          setShowSuggestionModal(true);
+          return; // Don't navigate away yet
+        }
+      }
+
       router.back();
     } catch (error) {
       console.error('Error creating renewals:', error);
@@ -210,6 +276,22 @@ export default function AddRenewalScreen() {
         expiry_date: formData.expiry_date,
         notes: formData.notes || undefined,
       });
+
+      // Mark interest as converted if we had a preset
+      if (currentPreset?.code) {
+        await markInterestConverted(currentWorkspace.id, currentPreset.code);
+
+        // Fetch same-category suggestions
+        const suggestions = await getSameCategoryPresets(currentPreset.category, currentPreset.code);
+        if (suggestions.length > 0) {
+          setSameCategoryPresets(suggestions);
+          setLastAddedCategory(currentPreset.category);
+          setShowSuggestionModal(true);
+          setIsSaving(false);
+          return; // Don't navigate away yet
+        }
+      }
+
       router.back();
     } catch (error) {
       console.error('Error creating renewal:', error);
@@ -228,6 +310,60 @@ export default function AddRenewalScreen() {
       fee_amount: '',
       notes: '',
     });
+    setStep('form');
+  };
+
+  // Handle adding a suggestion from the modal
+  const handleAddSuggestion = (preset: RenewalPreset) => {
+    // Track that user viewed this suggestion
+    trackInterest(preset, 'suggestion_view');
+    // Close modal and navigate to form for this preset
+    setShowSuggestionModal(false);
+    setCurrentPreset(preset);
+    prefillForm(preset);
+    setStep('form');
+    // Clear selected presets since we're starting fresh
+    setSelectedPresets(new Set());
+  };
+
+  // Handle skipping suggestions
+  const handleSkipSuggestions = () => {
+    setShowSuggestionModal(false);
+    setSameCategoryPresets([]);
+    router.back();
+  };
+
+  // Handle search input
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      const results = await searchRenewalPresets(query);
+      setSearchResults(results);
+      setShowSearchResults(results.length > 0);
+
+      // Track interest for search results (user is actively looking)
+      results.slice(0, 3).forEach(preset => {
+        trackInterest(preset, 'search');
+      });
+    } catch (error) {
+      console.error('Search error:', error);
+    }
+  }, [trackInterest]);
+
+  // Handle selecting a search result
+  const handleSearchResultSelect = (preset: RenewalPreset) => {
+    trackInterest(preset, 'search');
+    setCurrentPreset(preset);
+    prefillForm(preset);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
     setStep('form');
   };
 
@@ -317,6 +453,51 @@ export default function AddRenewalScreen() {
   // Render Persona Step
   const renderPersonaStep = () => (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.stepContent}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Ionicons name="search" size={20} color={Colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={handleSearch}
+            placeholder="Search for a renewal type..."
+            placeholderTextColor={Colors.textMuted}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => {
+              setSearchQuery('');
+              setSearchResults([]);
+              setShowSearchResults(false);
+            }}>
+              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Search Results Dropdown */}
+        {showSearchResults && (
+          <View style={styles.searchResults}>
+            {searchResults.map((preset) => (
+              <Pressable
+                key={preset.code}
+                style={styles.searchResultItem}
+                onPress={() => handleSearchResultSelect(preset)}
+              >
+                <Text style={styles.searchResultIcon}>{preset.icon}</Text>
+                <View style={styles.searchResultInfo}>
+                  <Text style={styles.searchResultTitle}>{preset.title}</Text>
+                  <Text style={styles.searchResultCategory}>
+                    {CATEGORY_INFO[preset.category as keyof typeof CATEGORY_INFO]?.label || preset.category}
+                  </Text>
+                </View>
+                <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
       <Text style={styles.stepTitle}>What describes you?</Text>
       <Text style={styles.stepSubtitle}>
         We'll suggest relevant renewals to track
@@ -636,6 +817,71 @@ export default function AddRenewalScreen() {
     </KeyboardAvoidingView>
   );
 
+  // Render Suggestion Modal
+  const renderSuggestionModal = () => (
+    <Modal
+      visible={showSuggestionModal}
+      transparent
+      animationType="slide"
+      onRequestClose={handleSkipSuggestions}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHandle} />
+          </View>
+
+          <View style={styles.modalContent}>
+            <Text style={styles.modalIcon}>🎯</Text>
+            <Text style={styles.modalTitle}>You might also need...</Text>
+            <Text style={styles.modalSubtitle}>
+              Since you added a {lastAddedCategory} renewal, here are related items
+            </Text>
+
+            <ScrollView style={styles.suggestionsList} showsVerticalScrollIndicator={false}>
+              {sameCategoryPresets.map((preset) => (
+                <Pressable
+                  key={preset.code}
+                  style={styles.suggestionCard}
+                  onPress={() => handleAddSuggestion(preset)}
+                >
+                  <Text style={styles.suggestionIcon}>{preset.icon}</Text>
+                  <View style={styles.suggestionInfo}>
+                    <Text style={styles.suggestionTitle}>{preset.title}</Text>
+                    {preset.penalty_info && (
+                      <Text style={styles.suggestionPenalty} numberOfLines={1}>
+                        ⚠️ {preset.penalty_info}
+                      </Text>
+                    )}
+                    <View style={styles.suggestionMeta}>
+                      {preset.frequency_months && (
+                        <Text style={styles.suggestionFrequency}>
+                          {preset.frequency_months >= 12
+                            ? `Every ${preset.frequency_months / 12}yr`
+                            : `Every ${preset.frequency_months}mo`}
+                        </Text>
+                      )}
+                      <Text style={styles.suggestionCost}>
+                        {formatCostRange(preset.cost_range_min, preset.cost_range_max)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="add-circle" size={24} color={Colors.primary} />
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalSkipButton} onPress={handleSkipSuggestions}>
+                <Text style={styles.modalSkipText}>Done for now</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -677,6 +923,9 @@ export default function AddRenewalScreen() {
       {step === 'persona' && renderPersonaStep()}
       {step === 'stack' && renderStackStep()}
       {step === 'form' && renderFormStep()}
+
+      {/* Suggestion Modal */}
+      {renderSuggestionModal()}
     </SafeAreaView>
   );
 }
@@ -1118,5 +1367,152 @@ const styles = StyleSheet.create({
   saveButtonText: {
     ...Typography.button,
     color: Colors.background,
+  },
+
+  // Search
+  searchContainer: {
+    marginBottom: Spacing.xl,
+    zIndex: 10,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...GlassStyle,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.text,
+    paddingVertical: Spacing.sm,
+  },
+  searchResults: {
+    marginTop: Spacing.sm,
+    ...GlassStyle,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+  },
+  searchResultIcon: {
+    fontSize: 24,
+    marginRight: Spacing.md,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultTitle: {
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  searchResultCategory: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+
+  // Suggestion Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius['2xl'],
+    borderTopRightRadius: BorderRadius['2xl'],
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.surfaceBorder,
+    borderRadius: 2,
+  },
+  modalContent: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  modalIcon: {
+    fontSize: 48,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    ...Typography.h2,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  modalSubtitle: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  suggestionsList: {
+    maxHeight: 300,
+  },
+  suggestionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...GlassStyle,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  suggestionIcon: {
+    fontSize: 28,
+    marginRight: Spacing.md,
+  },
+  suggestionInfo: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  suggestionPenalty: {
+    ...Typography.bodySm,
+    color: Colors.warning,
+    marginBottom: 4,
+  },
+  suggestionMeta: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  suggestionFrequency: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+  },
+  suggestionCost: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+  },
+  modalActions: {
+    marginTop: Spacing.lg,
+  },
+  modalSkipButton: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  modalSkipText: {
+    ...Typography.button,
+    color: Colors.textMuted,
   },
 });
