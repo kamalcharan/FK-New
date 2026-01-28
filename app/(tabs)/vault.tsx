@@ -381,14 +381,24 @@ export default function VaultScreen() {
         {/* Renewals Section */}
         {renewals.length > 0 && (
           <View style={styles.renewalsSection}>
-            <Text style={styles.sectionTitle}>RENEWALS & COMPLIANCE</Text>
+            <View style={styles.renewalsSectionHeader}>
+              <Text style={styles.sectionTitle}>RENEWALS & COMPLIANCE</Text>
+              <Pressable onPress={() => router.push('/add-renewal')}>
+                <Text style={styles.addMoreText}>+ Add</Text>
+              </Pressable>
+            </View>
             {renewals.map(renewal => {
               const days = Math.ceil((new Date(renewal.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
               const urgencyColor = getUrgencyColor(days);
+              const isOverdue = days < 0;
 
               return (
-                <Pressable key={renewal.id} style={styles.renewalCard}>
-                  <View style={styles.renewalIcon}>
+                <Pressable
+                  key={renewal.id}
+                  style={[styles.renewalCard, isOverdue && styles.renewalCardOverdue]}
+                  onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id } })}
+                >
+                  <View style={[styles.renewalIcon, { backgroundColor: urgencyColor + '20' }]}>
                     <Text style={styles.renewalEmoji}>
                       {renewal.renewal_type === 'property_tax' ? '🏠' :
                        renewal.renewal_type === 'fire_noc' ? '🔥' :
@@ -397,16 +407,35 @@ export default function VaultScreen() {
                   </View>
                   <View style={styles.renewalInfo}>
                     <Text style={styles.renewalTitle}>{renewal.title}</Text>
-                    <Text style={styles.renewalAuthority}>{renewal.authority_name}</Text>
+                    <Text style={styles.renewalAuthority}>{renewal.authority_name || 'No authority'}</Text>
                   </View>
                   <View style={[styles.renewalDays, { backgroundColor: urgencyColor + '20' }]}>
                     <Text style={[styles.renewalDaysText, { color: urgencyColor }]}>
-                      {days}d
+                      {isOverdue ? `${Math.abs(days)}d ago` : `${days}d`}
                     </Text>
                   </View>
                 </Pressable>
               );
             })}
+          </View>
+        )}
+
+        {/* Empty Renewals State */}
+        {renewals.length === 0 && policies.length > 0 && (
+          <View style={styles.emptyRenewalsSection}>
+            <View style={styles.emptyRenewalsCard}>
+              <Text style={styles.emptyRenewalsIcon}>🔔</Text>
+              <Text style={styles.emptyRenewalsTitle}>Track Renewals</Text>
+              <Text style={styles.emptyRenewalsText}>
+                GHMC doesn't send reminders. Neither does the Fire Department.
+              </Text>
+              <Pressable
+                style={styles.addRenewalButton}
+                onPress={() => router.push({ pathname: '/add-renewal', params: { showStories: 'true' } })}
+              >
+                <Text style={styles.addRenewalButtonText}>Add Renewal Reminder</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -751,6 +780,57 @@ const styles = StyleSheet.create({
   renewalDaysText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  renewalCardOverdue: {
+    borderColor: Colors.danger,
+    borderWidth: 1,
+  },
+  renewalsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  addMoreText: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  emptyRenewalsSection: {
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+  },
+  emptyRenewalsCard: {
+    ...GlassStyle,
+    borderRadius: BorderRadius['2xl'],
+    padding: Spacing.xl,
+    alignItems: 'center',
+    borderStyle: 'dashed',
+  },
+  emptyRenewalsIcon: {
+    fontSize: 40,
+    marginBottom: Spacing.md,
+  },
+  emptyRenewalsTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    marginBottom: Spacing.sm,
+  },
+  emptyRenewalsText: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+  },
+  addRenewalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.xl,
+  },
+  addRenewalButtonText: {
+    ...Typography.button,
+    color: Colors.text,
   },
   bottomPadding: {
     height: 80,
