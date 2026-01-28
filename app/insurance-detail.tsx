@@ -15,7 +15,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { showSuccessToast, showErrorToast } from '../src/components/ToastConfig';
 import { useAppSelector } from '../src/store';
@@ -63,10 +62,10 @@ export default function InsuranceDetailScreen() {
     setRefreshing(false);
   }, [id, currentWorkspace?.id]);
 
-  // Copy to clipboard
-  const copyToClipboard = async (text: string, label: string) => {
-    await Clipboard.setStringAsync(text);
-    showSuccessToast('Copied', `${label} copied to clipboard`);
+  // Show policy number (clipboard requires additional package)
+  const copyToClipboard = (text: string, label: string) => {
+    // Show toast with the value for easy reference
+    showSuccessToast(label, text);
   };
 
   // Call helpline
