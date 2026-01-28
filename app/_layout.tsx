@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator } from 'react-native';
@@ -12,12 +12,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { store } from '../src/store';
 import { Colors } from '../src/constants/theme';
+import { SplashScreen } from '../src/components/SplashScreen';
 import { toastConfig } from '../src/components/ToastConfig';
 
-// Prevent native splash screen from auto-hiding until we're ready
+// Prevent native splash screen from auto-hiding until fonts load
 NativeSplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [showSplash, setShowSplash] = useState(true);
+
   const [fontsLoaded, fontError] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -27,7 +30,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      // Hide native splash once fonts are loaded
+      // Hide native splash immediately, show our custom splash
       NativeSplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
@@ -49,6 +52,13 @@ export default function RootLayout() {
           Font loading error: {fontError.message}
         </Text>
       </View>
+    );
+  }
+
+  // Show custom splash with logo + tagline
+  if (showSplash) {
+    return (
+      <SplashScreen onFinish={() => setShowSplash(false)} />
     );
   }
 
