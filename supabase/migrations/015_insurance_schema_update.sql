@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS fk_policy_covered_members (
 
   -- One of these will be set (member, invite, or custom)
   member_id UUID REFERENCES fk_workspace_members(id) ON DELETE SET NULL,
-  invite_id UUID REFERENCES fk_workspace_invites(id) ON DELETE SET NULL,
+  invite_id UUID REFERENCES fk_invites(id) ON DELETE SET NULL,
   custom_name TEXT,
 
   -- Member details
@@ -270,7 +270,7 @@ BEGIN
         FROM fk_policy_covered_members pcm
         LEFT JOIN fk_workspace_members wm ON pcm.member_id = wm.id
         LEFT JOIN fk_user_profiles up ON wm.user_id = up.user_id
-        LEFT JOIN fk_workspace_invites wi ON pcm.invite_id = wi.id
+        LEFT JOIN fk_invites wi ON pcm.invite_id = wi.id
         WHERE pcm.policy_id = ip.id
       ),
       '[]'::jsonb
