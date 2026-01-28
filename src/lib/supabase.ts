@@ -155,6 +155,13 @@ export const signInWithGoogle = async (): Promise<{
     if (result.type === 'success' && result.url) {
       console.log('[SupabaseGoogleAuth] Success URL:', result.url);
 
+      // Explicitly dismiss the browser to ensure it closes
+      try {
+        await WebBrowser.dismissBrowser();
+      } catch (dismissError) {
+        console.log('[SupabaseGoogleAuth] Browser dismiss (may already be closed):', dismissError);
+      }
+
       // Extract the tokens/session from the URL
       // Supabase returns access_token and refresh_token as URL fragments
       const url = new URL(result.url);
@@ -211,13 +218,31 @@ export const signInWithGoogle = async (): Promise<{
       }
     } else if (result.type === 'cancel' || result.type === 'dismiss') {
       console.log('[SupabaseGoogleAuth] User cancelled');
+      // Ensure browser is dismissed even on cancel
+      try {
+        await WebBrowser.dismissBrowser();
+      } catch (dismissError) {
+        // Ignore - browser may already be closed
+      }
       return null;
     } else {
       console.error('[SupabaseGoogleAuth] Unexpected result:', result);
+      // Ensure browser is dismissed on error
+      try {
+        await WebBrowser.dismissBrowser();
+      } catch (dismissError) {
+        // Ignore - browser may already be closed
+      }
       throw new Error('Authentication failed');
     }
   } catch (err: any) {
     console.error('[SupabaseGoogleAuth] Error:', err);
+    // Ensure browser is dismissed on error
+    try {
+      await WebBrowser.dismissBrowser();
+    } catch (dismissError) {
+      // Ignore - browser may already be closed
+    }
     throw err;
   }
 };
