@@ -63,8 +63,89 @@ export interface VaultItem {
   created_at: string;
 }
 
-export type InsuranceType = 'health' | 'vehicle' | 'life' | 'property' | 'other';
+export type InsuranceType = 'health' | 'vehicle' | 'life' | 'property' | 'travel' | 'other';
 export type RenewalType = 'ghmc' | 'fire_noc' | 'fssai' | 'pollution' | 'property_tax' | 'other';
+
+// ============================================
+// Insurance Types (Enhanced)
+// ============================================
+
+export interface InsuranceTypeInfo {
+  code: string;
+  name: string;
+  icon: string;
+  subtypes: InsuranceSubtype[];
+}
+
+export interface InsuranceSubtype {
+  code: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+export interface CoveredMember {
+  id: string;
+  member_id?: string;
+  invite_id?: string;
+  custom_name?: string;
+  relationship_label: string;
+  relationship_icon: string;
+  full_name: string;
+  is_joined: boolean;
+  is_pending: boolean;
+  is_external: boolean;
+}
+
+export interface InsurancePolicy {
+  id: string;
+  workspace_id: string;
+  policy_type: InsuranceType;
+  subtype?: string;
+  subtype_name?: string;
+  subtype_icon?: string;
+  policy_number?: string;
+  provider_name: string;
+  scheme_name?: string;
+  sum_insured?: number;
+  premium_amount?: number;
+  premium_frequency?: 'monthly' | 'quarterly' | 'yearly' | 'one_time';
+  start_date?: string;
+  expiry_date: string;
+  status: 'active' | 'expired' | 'cancelled' | 'claimed';
+  document_url?: string;
+  tpa_name?: string;
+  tpa_helpline?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  notes?: string;
+  metadata?: Record<string, any>;
+  is_demo?: boolean;
+  created_at: string;
+  days_until_expiry?: number;
+  covered_members: CoveredMember[];
+}
+
+export interface InsurancePolicyFormData {
+  policy_type: InsuranceType;
+  subtype: string;
+  provider_name: string;
+  scheme_name?: string;
+  policy_number?: string;
+  sum_insured?: number;
+  premium_amount?: number;
+  premium_frequency?: 'monthly' | 'quarterly' | 'yearly' | 'one_time';
+  start_date?: Date;
+  expiry_date: Date;
+  tpa_name?: string;
+  tpa_helpline?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  notes?: string;
+  covered_member_ids: string[]; // member_id or invite_id
+  custom_members?: { name: string; relationship: string }[];
+  document_uri?: string;
+}
 
 // ============================================
 // App State Types
