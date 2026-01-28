@@ -59,7 +59,7 @@ interface Renewal {
 
 export default function RenewalDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
   const { user } = useAppSelector(state => state.auth);
 
   // State
@@ -86,8 +86,10 @@ export default function RenewalDetailScreen() {
     new_expiry_date: '',
     new_reference_number: '',
     cost_paid: '',
+    payment_ref: '',
     notes: '',
   });
+  const [useCustomDate, setUseCustomDate] = useState(false);
 
   // Load renewal data
   useEffect(() => {
@@ -95,6 +97,13 @@ export default function RenewalDetailScreen() {
       loadRenewal();
     }
   }, [id]);
+
+  // Auto-open renew modal if action='renew'
+  useEffect(() => {
+    if (action === 'renew' && renewal && !showRenewModal) {
+      openRenewModal();
+    }
+  }, [action, renewal]);
 
   const loadRenewal = async () => {
     try {
@@ -190,16 +199,41 @@ export default function RenewalDetailScreen() {
   };
 
   const openRenewModal = () => {
-    // Pre-fill suggested expiry date
-    if (renewal?.frequency_months) {
-      const suggested = suggestNextExpiryDate(renewal.expiry_date, renewal.frequency_months);
-      setRenewData({
-        ...renewData,
-        new_expiry_date: suggested.toISOString().split('T')[0],
-        new_reference_number: renewal.reference_number || '',
-      });
-    }
+    // Pre-fill suggested expiry date (default to 1 year if no frequency)
+    const frequencyMonths = renewal?.frequency_months || 12;
+    const suggested = suggestNextExpiryDate(renewal?.expiry_date || '', frequencyMonths);
+    setRenewData({
+      new_expiry_date: suggested.toISOString().split('T')[0],
+      new_reference_number: renewal?.reference_number || '',
+      cost_paid: renewal?.fee_amount?.toString() || '',
+      payment_ref: '',
+      notes: '',
+    });
+    setUseCustomDate(false);
     setShowRenewModal(true);
+  };
+
+  // Get standard date option label
+  const getStandardDateLabel = () => {
+    const months = renewal?.frequency_months || 12;
+    if (months >= 12) {
+      return `${months / 12} Year${months > 12 ? 's' : ''} (Standard)`;
+    }
+    return `${months} Months (Standard)`;
+  };
+
+  // Get standard suggested date
+  const getStandardDate = () => {
+    const months = renewal?.frequency_months || 12;
+    const suggested = suggestNextExpiryDate(renewal?.expiry_date || '', months);
+    return suggested.toISOString().split('T')[0];
+  };
+
+  // Format date for display
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return 'Select...';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   if (isLoading) {
@@ -516,7 +550,7 @@ export default function RenewalDetailScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Renew Modal */}
+      {/* Renew Modal - Bottom Sheet Style */}
       <Modal
         visible={showRenewModal}
         transparent
@@ -526,81 +560,133 @@ export default function RenewalDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Mark as Renewed</Text>
-            <Text style={styles.modalSubtitle}>
-              Previous expiry: {formatExpiryDate(renewal.expiry_date)}
-            </Text>
 
-            <View style={styles.modalForm}>
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>NEW EXPIRY DATE *</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={renewData.new_expiry_date}
-                  onChangeText={(text) => setRenewData({ ...renewData, new_expiry_date: text })}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={Colors.textMuted}
-                />
-                {renewal.frequency_months && (
-                  <Pressable
-                    style={styles.suggestButton}
-                    onPress={() => {
-                      const suggested = suggestNextExpiryDate(
-                        renewal.expiry_date,
-                        renewal.frequency_months!
-                      );
-                      setRenewData({
-                        ...renewData,
-                        new_expiry_date: suggested.toISOString().split('T')[0],
-                      });
-                    }}
-                  >
-                    <Text style={styles.suggestButtonText}>
-                      💡 Suggest: {renewal.frequency_months >= 12
-                        ? `${renewal.frequency_months / 12} year from expiry`
-                        : `${renewal.frequency_months} months from expiry`}
-                    </Text>
-                  </Pressable>
-                )}
+            {/* Header */}
+            <View style={styles.renewModalHeader}>
+              <View>
+                <Text style={styles.renewModalLabel}>UPDATE RECORD</Text>
+                <Text style={styles.renewModalTitle}>Renew {renewal.title}</Text>
               </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>NEW REFERENCE # (optional)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={renewData.new_reference_number}
-                  onChangeText={(text) => setRenewData({ ...renewData, new_reference_number: text })}
-                  placeholder="New license/reference number"
-                  placeholderTextColor={Colors.textMuted}
-                />
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>COST PAID (₹)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={renewData.cost_paid}
-                  onChangeText={(text) => setRenewData({ ...renewData, cost_paid: text })}
-                  placeholder="Amount paid for renewal"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>NOTES</Text>
-                <TextInput
-                  style={[styles.modalInput, styles.modalInputMultiline]}
-                  value={renewData.notes}
-                  onChangeText={(text) => setRenewData({ ...renewData, notes: text })}
-                  placeholder="Any notes about this renewal"
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
-                  numberOfLines={2}
-                />
+              <View style={styles.renewModalIcon}>
+                <Ionicons name="refresh" size={24} color={Colors.primary} />
               </View>
             </View>
 
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {/* Date Options */}
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalLabel}>New Expiry Date</Text>
+                <View style={styles.dateOptionsRow}>
+                  {/* Standard Option */}
+                  <Pressable
+                    style={[
+                      styles.dateOption,
+                      !useCustomDate && styles.dateOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setUseCustomDate(false);
+                      setRenewData({ ...renewData, new_expiry_date: getStandardDate() });
+                    }}
+                  >
+                    <Text style={[styles.dateOptionLabel, !useCustomDate && styles.dateOptionLabelSelected]}>
+                      {getStandardDateLabel()}
+                    </Text>
+                    <Text style={[styles.dateOptionValue, !useCustomDate && styles.dateOptionValueSelected]}>
+                      {formatDateDisplay(getStandardDate())}
+                    </Text>
+                    {!useCustomDate && (
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary} style={styles.dateOptionCheck} />
+                    )}
+                  </Pressable>
+
+                  {/* Custom Option */}
+                  <Pressable
+                    style={[
+                      styles.dateOption,
+                      useCustomDate && styles.dateOptionSelected,
+                    ]}
+                    onPress={() => setUseCustomDate(true)}
+                  >
+                    <Text style={[styles.dateOptionLabel, useCustomDate && styles.dateOptionLabelSelected]}>
+                      Custom Date
+                    </Text>
+                    {useCustomDate ? (
+                      <TextInput
+                        style={styles.customDateInput}
+                        value={renewData.new_expiry_date}
+                        onChangeText={(text) => setRenewData({ ...renewData, new_expiry_date: text })}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor={Colors.textMuted}
+                      />
+                    ) : (
+                      <Text style={styles.dateOptionValue}>Select...</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Reference Number with Helper */}
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalLabel}>New Reference Number</Text>
+                <View style={styles.inputWithHelper}>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={renewData.new_reference_number}
+                    onChangeText={(text) => setRenewData({ ...renewData, new_reference_number: text })}
+                    placeholder="TL/HYD/2026/54321"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                  {renewal.reference_number && (
+                    <Pressable
+                      style={styles.sameAsOldButton}
+                      onPress={() => setRenewData({ ...renewData, new_reference_number: renewal.reference_number || '' })}
+                    >
+                      <Text style={styles.sameAsOldText}>SAME AS OLD</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              {/* Amount + Payment Ref Row */}
+              <View style={styles.splitRow}>
+                <View style={styles.splitInput}>
+                  <Text style={styles.modalLabel}>Amount Paid</Text>
+                  <View style={styles.amountInputWrapper}>
+                    <Text style={styles.currencySymbol}>₹</Text>
+                    <TextInput
+                      style={styles.amountInput}
+                      value={renewData.cost_paid}
+                      onChangeText={(text) => setRenewData({ ...renewData, cost_paid: text })}
+                      placeholder="5500"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.splitInput}>
+                  <Text style={styles.modalLabel}>Payment Ref</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={renewData.payment_ref}
+                    onChangeText={(text) => setRenewData({ ...renewData, payment_ref: text })}
+                    placeholder="GPay / Portal ID"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                </View>
+              </View>
+
+              {/* Document Upload Placeholder */}
+              <Pressable style={styles.uploadZone}>
+                <View style={styles.uploadIcon}>
+                  <Ionicons name="cloud-upload-outline" size={24} color={Colors.textMuted} />
+                </View>
+                <Text style={styles.uploadTitle}>Upload New License</Text>
+                <Text style={styles.uploadSubtitle}>PDF, JPG up to 10MB</Text>
+              </Pressable>
+            </ScrollView>
+
+            {/* Actions */}
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancelButton}
@@ -617,9 +703,12 @@ export default function RenewalDetailScreen() {
                 disabled={!renewData.new_expiry_date || isSaving}
               >
                 {isSaving ? (
-                  <ActivityIndicator size="small" color="#000" />
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalConfirmButtonText}>Confirm Renewal</Text>
+                  <>
+                    <Ionicons name="checkmark-done" size={18} color="#fff" />
+                    <Text style={styles.modalConfirmButtonText}>CONFIRM RENEWAL</Text>
+                  </>
                 )}
               </Pressable>
             </View>
@@ -972,73 +1061,214 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: BorderRadius['2xl'],
-    borderTopRightRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: Spacing.lg,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   modalHandle: {
-    width: 40,
-    height: 4,
+    width: 48,
+    height: 6,
     backgroundColor: Colors.surfaceBorder,
-    borderRadius: 2,
+    borderRadius: 3,
     alignSelf: 'center',
     marginBottom: Spacing.lg,
   },
-  modalTitle: {
-    ...Typography.h2,
-    color: Colors.text,
-    textAlign: 'center',
+  modalScrollView: {
+    maxHeight: 400,
   },
-  modalSubtitle: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Spacing.xs,
+
+  // Renew Modal Header
+  renewModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: Spacing.xl,
   },
-  modalForm: {
+  renewModalLabel: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  renewModalTitle: {
+    ...Typography.h2,
+    color: Colors.text,
+  },
+  renewModalIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Date Options
+  dateOptionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  dateOption: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius['2xl'],
+    padding: Spacing.md,
+    position: 'relative',
+  },
+  dateOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+  },
+  dateOptionLabel: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  dateOptionLabelSelected: {
+    color: Colors.primary,
+  },
+  dateOptionValue: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    fontWeight: '700',
+  },
+  dateOptionValueSelected: {
+    color: Colors.text,
+  },
+  dateOptionCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  customDateInput: {
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '700',
+    padding: 0,
+    margin: 0,
+  },
+
+  // Input with Helper
+  inputWithHelper: {
+    position: 'relative',
+  },
+  sameAsOldButton: {
+    position: 'absolute',
+    right: Spacing.md,
+    top: '50%',
+    transform: [{ translateY: -12 }],
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  sameAsOldText: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+
+  // Split Row
+  splitRow: {
+    flexDirection: 'row',
     gap: Spacing.md,
   },
-  modalInputGroup: {
+  splitInput: {
+    flex: 1,
+  },
+  amountInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...GlassStyle,
+    borderRadius: BorderRadius.lg,
+    paddingLeft: Spacing.md,
+  },
+  currencySymbol: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    fontWeight: '700',
+  },
+  amountInput: {
+    flex: 1,
+    padding: Spacing.md,
+    paddingLeft: Spacing.sm,
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+
+  // Upload Zone
+  uploadZone: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius['3xl'],
+    padding: Spacing.xl,
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceLight,
+    marginTop: Spacing.md,
+  },
+  uploadIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: Spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  uploadTitle: {
+    ...Typography.bodySm,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+  uploadSubtitle: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+
+  modalInputGroup: {
+    marginBottom: Spacing.md,
   },
   modalLabel: {
-    ...Typography.label,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
+    ...Typography.bodySm,
+    color: Colors.text,
+    fontWeight: '700',
     marginBottom: Spacing.sm,
   },
   modalInput: {
     ...GlassStyle,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius['2xl'],
     padding: Spacing.md,
     ...Typography.body,
     color: Colors.text,
   },
-  modalInputMultiline: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  suggestButton: {
-    marginTop: Spacing.sm,
-    padding: Spacing.sm,
-  },
-  suggestButtonText: {
-    ...Typography.bodySm,
-    color: Colors.primary,
-  },
   modalActions: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginTop: Spacing.xl,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
   },
   modalCancelButton: {
-    flex: 1,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    ...GlassStyle,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.surfaceLight,
     alignItems: 'center',
   },
   modalCancelButtonText: {
@@ -1047,17 +1277,27 @@ const styles = StyleSheet.create({
   },
   modalConfirmButton: {
     flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.text,
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.success,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalConfirmButtonDisabled: {
     opacity: 0.5,
   },
   modalConfirmButtonText: {
     ...Typography.button,
-    color: Colors.background,
+    color: '#fff',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 
   // Delete Modal

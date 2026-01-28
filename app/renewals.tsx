@@ -1,5 +1,5 @@
 // app/renewals.tsx
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,14 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { useAppSelector } from '../src/store';
-import { getRenewals, isSupabaseReady } from '../src/lib/supabase';
+import { getRenewals, getRenewalPresets, isSupabaseReady, RenewalPreset } from '../src/lib/supabase';
 import {
   calculateDaysUntilExpiry,
   getRenewalUrgencyStatus,
@@ -35,6 +36,14 @@ interface Renewal {
   is_demo?: boolean;
 }
 
+// Quick add presets to show
+const QUICK_ADD_PRESETS = [
+  { code: 'fssai_license', icon: '🍽️', title: 'FSSAI License' },
+  { code: 'property_tax', icon: '🏠', title: 'Property Tax' },
+  { code: 'vehicle_insurance', icon: '🚗', title: 'Vehicle Insurance' },
+  { code: 'trade_license', icon: '🏪', title: 'Trade License' },
+];
+
 export default function RenewalsScreen() {
   const router = useRouter();
   const { currentWorkspace } = useAppSelector(state => state.workspace);
@@ -42,6 +51,28 @@ export default function RenewalsScreen() {
   const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Pulsing animation for overdue cards
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.02,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,43 +110,109 @@ export default function RenewalsScreen() {
   });
   const upcomingRenewals = renewals.filter(r => calculateDaysUntilExpiry(r.expiry_date) > 30);
 
-  const renderRenewalCard = (renewal: Renewal) => {
-    const daysUntilExpiry = calculateDaysUntilExpiry(renewal.expiry_date);
-    const urgency = getRenewalUrgencyStatus(daysUntilExpiry);
+  // Calculate totals
+  const needsAttentionCount = overdueRenewals.length + urgentRenewals.length;
+  const totalEstimatedCost = renewals.reduce((sum, r) => sum + (r.fee_amount || 0), 0);
+
+  // Render overdue card with prominent styling
+  const renderOverdueCard = (renewal: Renewal) => {
+    const daysOverdue = Math.abs(calculateDaysUntilExpiry(renewal.expiry_date));
+    const icon = getCategoryIcon(renewal.category || 'personal');
+
+    return (
+      <Animated.View
+        key={renewal.id}
+        style={[styles.overdueCard, { transform: [{ scale: pulseAnim }] }]}
+      >
+        <View style={styles.overdueHeader}>
+          <View style={styles.overdueIconContainer}>
+            <Text style={styles.overdueIcon}>{icon}</Text>
+          </View>
+          <View style={styles.overdueInfo}>
+            <Text style={styles.overdueTitle}>{renewal.title}</Text>
+            <Text style={styles.overdueExpiry}>Expired {daysOverdue} days ago</Text>
+          </View>
+        </View>
+
+        {renewal.reference_number && (
+          <View style={styles.referenceBox}>
+            <Text style={styles.referenceText}>ID: {renewal.reference_number}</Text>
+          </View>
+        )}
+
+        <View style={styles.overdueActions}>
+          <Pressable
+            style={styles.renewNowButton}
+            onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id, action: 'renew' } })}
+          >
+            <Text style={styles.renewNowButtonText}>Renew Now</Text>
+          </Pressable>
+          <Pressable
+            style={styles.snoozeButton}
+            onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id } })}
+          >
+            <Text style={styles.snoozeButtonText}>Details</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  // Render urgent card with amber styling
+  const renderUrgentCard = (renewal: Renewal) => {
+    const daysLeft = calculateDaysUntilExpiry(renewal.expiry_date);
+    const icon = getCategoryIcon(renewal.category || 'personal');
+
+    return (
+      <View key={renewal.id} style={styles.urgentCard}>
+        <View style={styles.urgentHeader}>
+          <View style={styles.urgentIconContainer}>
+            <Text style={styles.urgentIcon}>{icon}</Text>
+          </View>
+          <View style={styles.urgentInfo}>
+            <Text style={styles.urgentTitle} numberOfLines={1}>{renewal.title}</Text>
+            <Text style={styles.urgentExpiry}>
+              {daysLeft === 0 ? 'Expires today!' : `Expires in ${daysLeft} days`}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.moreButton}
+            onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id } })}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textMuted} />
+          </Pressable>
+        </View>
+
+        <Pressable
+          style={styles.markRenewedButton}
+          onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id, action: 'renew' } })}
+        >
+          <Text style={styles.markRenewedButtonText}>Mark as Renewed</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  // Render upcoming card (simpler)
+  const renderUpcomingCard = (renewal: Renewal) => {
+    const daysLeft = calculateDaysUntilExpiry(renewal.expiry_date);
     const icon = getCategoryIcon(renewal.category || 'personal');
 
     return (
       <Pressable
         key={renewal.id}
-        style={[
-          styles.renewalCard,
-          daysUntilExpiry < 0 && styles.renewalCardOverdue,
-          daysUntilExpiry >= 0 && daysUntilExpiry <= 7 && styles.renewalCardUrgent,
-        ]}
+        style={styles.upcomingCard}
         onPress={() => router.push({ pathname: '/renewal-detail', params: { id: renewal.id } })}
       >
-        <Text style={styles.renewalIcon}>{icon}</Text>
-        <View style={styles.renewalInfo}>
-          <Text style={styles.renewalTitle} numberOfLines={1}>{renewal.title}</Text>
-          {renewal.authority_name && (
-            <Text style={styles.renewalAuthority} numberOfLines={1}>{renewal.authority_name}</Text>
-          )}
-          <View style={styles.renewalMeta}>
-            <View style={[styles.urgencyBadge, { backgroundColor: urgency.color + '20' }]}>
-              <Text style={[styles.urgencyText, { color: urgency.color }]}>
-                {daysUntilExpiry < 0
-                  ? `${Math.abs(daysUntilExpiry)}d overdue`
-                  : daysUntilExpiry === 0
-                  ? 'Today'
-                  : `${daysUntilExpiry}d left`}
-              </Text>
-            </View>
-            {renewal.fee_amount && (
-              <Text style={styles.renewalCost}>₹{renewal.fee_amount.toLocaleString('en-IN')}</Text>
-            )}
-          </View>
+        <Text style={styles.upcomingIcon}>{icon}</Text>
+        <View style={styles.upcomingInfo}>
+          <Text style={styles.upcomingTitle} numberOfLines={1}>{renewal.title}</Text>
+          <Text style={styles.upcomingExpiry}>{daysLeft}d left</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        {renewal.fee_amount && (
+          <Text style={styles.upcomingCost}>₹{renewal.fee_amount.toLocaleString('en-IN')}</Text>
+        )}
+        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       </Pressable>
     );
   };
@@ -134,15 +231,18 @@ export default function RenewalsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Renewals</Text>
-        <Pressable
-          style={styles.addButton}
-          onPress={() => router.push('/add-renewal')}
-        >
-          <Ionicons name="add" size={24} color={Colors.text} />
+        <View style={styles.headerLeft}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </Pressable>
+          <View style={styles.headerTitles}>
+            <Text style={styles.headerTitle}>Renewals</Text>
+            <Text style={styles.headerSubtitle}>{currentWorkspace?.name || 'Family Vault'}</Text>
+          </View>
+        </View>
+        <Pressable style={styles.notificationButton}>
+          <Ionicons name="notifications-outline" size={22} color={Colors.text} />
+          {needsAttentionCount > 0 && <View style={styles.notificationDot} />}
         </Pressable>
       </View>
 
@@ -168,45 +268,85 @@ export default function RenewalsScreen() {
             >
               <Text style={styles.emptyButtonText}>Add your first renewal</Text>
             </Pressable>
+
+            {/* Quick Add Presets in Empty State */}
+            <Text style={styles.quickAddTitle}>QUICK ADD</Text>
+            <View style={styles.quickAddGrid}>
+              {QUICK_ADD_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.code}
+                  style={styles.quickAddCard}
+                  onPress={() => router.push({ pathname: '/add-renewal', params: { presetCode: preset.code } })}
+                >
+                  <Text style={styles.quickAddIcon}>{preset.icon}</Text>
+                  <Text style={styles.quickAddLabel}>{preset.title}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : (
           <>
-            {/* Overdue Section */}
-            {overdueRenewals.length > 0 && (
+            {/* Needs Attention Section */}
+            {needsAttentionCount > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, { backgroundColor: Colors.danger }]} />
-                  <Text style={[styles.sectionTitle, { color: Colors.danger }]}>
-                    OVERDUE ({overdueRenewals.length})
-                  </Text>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Needs Attention</Text>
+                  <View style={styles.actionBadge}>
+                    <Text style={styles.actionBadgeText}>{needsAttentionCount} ACTIONS REQUIRED</Text>
+                  </View>
                 </View>
-                {overdueRenewals.map(renderRenewalCard)}
+
+                {/* Overdue cards first */}
+                {overdueRenewals.map(renderOverdueCard)}
+
+                {/* Then urgent cards */}
+                {urgentRenewals.map(renderUrgentCard)}
               </View>
             )}
 
-            {/* Urgent Section */}
-            {urgentRenewals.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, { backgroundColor: Colors.warning }]} />
-                  <Text style={[styles.sectionTitle, { color: Colors.warning }]}>
-                    DUE WITHIN 30 DAYS ({urgentRenewals.length})
+            {/* Quick Add Presets */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Add Presets</Text>
+              <View style={styles.quickAddGrid}>
+                {QUICK_ADD_PRESETS.map((preset) => (
+                  <Pressable
+                    key={preset.code}
+                    style={styles.quickAddCard}
+                    onPress={() => router.push({ pathname: '/add-renewal', params: { presetCode: preset.code } })}
+                  >
+                    <Text style={styles.quickAddIcon}>{preset.icon}</Text>
+                    <Text style={styles.quickAddLabel}>{preset.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Smart Reminder Card */}
+            {totalEstimatedCost > 0 && (
+              <View style={styles.smartReminderCard}>
+                <View style={styles.smartReminderContent}>
+                  <Text style={styles.smartReminderTitle}>Smart Reminder</Text>
+                  <Text style={styles.smartReminderText}>
+                    You have <Text style={styles.smartReminderHighlight}>{renewals.length} active renewals</Text> this year.
+                    Total estimated cost:{' '}
+                    <Text style={styles.smartReminderAmount}>₹{totalEstimatedCost.toLocaleString('en-IN')}</Text>
                   </Text>
+                  <Pressable style={styles.budgetButton}>
+                    <Text style={styles.budgetButtonText}>VIEW BUDGET REPORT</Text>
+                  </Pressable>
                 </View>
-                {urgentRenewals.map(renderRenewalCard)}
+                <View style={styles.smartReminderCircle} />
               </View>
             )}
 
             {/* Upcoming Section */}
             {upcomingRenewals.length > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, { backgroundColor: Colors.success }]} />
-                  <Text style={[styles.sectionTitle, { color: Colors.textMuted }]}>
-                    UPCOMING ({upcomingRenewals.length})
-                  </Text>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Upcoming</Text>
+                  <Text style={styles.sectionCount}>{upcomingRenewals.length} items</Text>
                 </View>
-                {upcomingRenewals.map(renderRenewalCard)}
+                {upcomingRenewals.map(renderUpcomingCard)}
               </View>
             )}
           </>
@@ -214,14 +354,12 @@ export default function RenewalsScreen() {
       </ScrollView>
 
       {/* FAB */}
-      {renewals.length > 0 && (
-        <Pressable
-          style={styles.fab}
-          onPress={() => router.push('/add-renewal')}
-        >
-          <Ionicons name="add" size={28} color="#000" />
-        </Pressable>
-      )}
+      <Pressable
+        style={styles.fab}
+        onPress={() => router.push('/add-renewal')}
+      >
+        <Ionicons name="add" size={28} color="#000" />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -236,34 +374,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: BorderRadius.lg,
     ...GlassStyle,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTitles: {
+    gap: 2,
   },
   headerTitle: {
-    flex: 1,
     ...Typography.h3,
     color: Colors.text,
-    textAlign: 'center',
   },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.lg,
-    ...GlassStyle,
+  headerSubtitle: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.danger,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
+
   scrollView: {
     flex: 1,
   },
@@ -275,7 +442,7 @@ const styles = StyleSheet.create({
   // Empty State
   emptyState: {
     alignItems: 'center',
-    paddingVertical: Spacing['3xl'],
+    paddingVertical: Spacing.xl,
   },
   emptyIcon: {
     fontSize: 64,
@@ -299,6 +466,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.xl,
+    marginBottom: Spacing['2xl'],
   },
   emptyButtonText: {
     ...Typography.button,
@@ -309,72 +477,298 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: Spacing.xl,
   },
-  sectionHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
   sectionTitle: {
-    ...Typography.label,
-    letterSpacing: 1,
+    ...Typography.h3,
+    color: Colors.text,
+    fontSize: 18,
+  },
+  sectionCount: {
+    ...Typography.bodySm,
+    color: Colors.textMuted,
+  },
+  actionBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  actionBadgeText: {
+    ...Typography.caption,
+    color: Colors.danger,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
-  // Renewal Card
-  renewalCard: {
+  // Overdue Card
+  overdueCard: {
+    backgroundColor: Colors.surface,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.danger,
+    borderRadius: BorderRadius['2xl'],
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    shadowColor: Colors.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  overdueHeader: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  overdueIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overdueIcon: {
+    fontSize: 24,
+  },
+  overdueInfo: {
+    flex: 1,
+  },
+  overdueTitle: {
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  overdueExpiry: {
+    ...Typography.bodySm,
+    color: Colors.danger,
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  referenceBox: {
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  referenceText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  overdueActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  renewNowButton: {
+    flex: 1,
+    backgroundColor: Colors.danger,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+    shadowColor: Colors.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  renewNowButtonText: {
+    ...Typography.button,
+    color: '#fff',
+  },
+  snoozeButton: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+  },
+  snoozeButtonText: {
+    ...Typography.button,
+    color: Colors.textMuted,
+  },
+
+  // Urgent Card
+  urgentCard: {
+    backgroundColor: Colors.surface,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.warning,
+    borderRadius: BorderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  urgentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    ...GlassStyle,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  urgentIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  urgentIcon: {
+    fontSize: 24,
+  },
+  urgentInfo: {
+    flex: 1,
+  },
+  urgentTitle: {
+    ...Typography.bodySm,
+    color: Colors.text,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  urgentExpiry: {
+    ...Typography.caption,
+    color: Colors.warning,
+    fontWeight: '500',
+  },
+  moreButton: {
+    padding: Spacing.xs,
+  },
+  markRenewedButton: {
+    borderWidth: 2,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+  },
+  markRenewedButtonText: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+
+  // Quick Add
+  quickAddTitle: {
+    ...Typography.label,
+    color: Colors.textMuted,
+    marginBottom: Spacing.md,
+    letterSpacing: 1,
+  },
+  quickAddGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  quickAddCard: {
+    width: '48%',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius['2xl'],
+    padding: Spacing.md,
+    alignItems: 'center',
+  },
+  quickAddIcon: {
+    fontSize: 28,
+    marginBottom: Spacing.sm,
+  },
+  quickAddLabel: {
+    ...Typography.caption,
+    color: Colors.text,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  // Smart Reminder Card
+  smartReminderCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius['3xl'],
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  smartReminderContent: {
+    zIndex: 1,
+  },
+  smartReminderTitle: {
+    ...Typography.h3,
+    color: '#fff',
+    marginBottom: Spacing.xs,
+  },
+  smartReminderText: {
+    ...Typography.bodySm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  smartReminderHighlight: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  smartReminderAmount: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  budgetButton: {
+    backgroundColor: '#fff',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  budgetButtonText: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  smartReminderCircle: {
+    position: 'absolute',
+    right: -40,
+    bottom: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+
+  // Upcoming Card
+  upcomingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
     borderRadius: BorderRadius.xl,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
   },
-  renewalCardOverdue: {
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-  },
-  renewalCardUrgent: {
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-  },
-  renewalIcon: {
-    fontSize: 28,
+  upcomingIcon: {
+    fontSize: 24,
     marginRight: Spacing.md,
   },
-  renewalInfo: {
+  upcomingInfo: {
     flex: 1,
   },
-  renewalTitle: {
-    ...Typography.body,
+  upcomingTitle: {
+    ...Typography.bodySm,
     color: Colors.text,
     fontWeight: '600',
     marginBottom: 2,
   },
-  renewalAuthority: {
-    ...Typography.bodySm,
-    color: Colors.textMuted,
-    marginBottom: Spacing.xs,
-  },
-  renewalMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  urgencyBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  urgencyText: {
+  upcomingExpiry: {
     ...Typography.caption,
-    fontWeight: '600',
+    color: Colors.success,
   },
-  renewalCost: {
+  upcomingCost: {
     ...Typography.bodySm,
     color: Colors.textMuted,
+    marginRight: Spacing.sm,
   },
 
   // FAB
