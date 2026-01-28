@@ -1,8 +1,8 @@
 // app/(tabs)/index.tsx
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../../src/constants/theme';
 import { useAppSelector } from '../../src/hooks/useStore';
@@ -14,6 +14,19 @@ import {
   UpcomingAlert,
   isSupabaseReady,
 } from '../../src/lib/supabase';
+
+// Urgency item type for unified attention section
+type UrgencyItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  daysLeft: number;
+  type: 'renewal' | 'policy';
+  icon: string;
+  color: string;
+  route: string;
+  routeParams?: Record<string, string>;
+};
 
 // Format currency in Indian style (₹1,00,000)
 const formatCurrency = (amount: number): string => {
@@ -33,6 +46,38 @@ export default function DashboardScreen() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<UpcomingAlert[]>([]);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+
+  // Pulsing animation for urgent items
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fabRotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.03, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  // FAB rotation animation
+  const toggleFabMenu = () => {
+    const toValue = showFabMenu ? 0 : 1;
+    Animated.spring(fabRotation, {
+      toValue,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+    setShowFabMenu(!showFabMenu);
+  };
+
+  const fabRotateInterpolate = fabRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg'],
+  });
 
   const loadData = useCallback(async () => {
     if (!currentWorkspace?.id || !isSupabaseReady()) {
@@ -86,6 +131,39 @@ export default function DashboardScreen() {
   };
 
   const firstName = user?.full_name?.split(' ')[0] || 'there';
+
+  // Build unified urgency items from alerts
+  const urgencyItems: UrgencyItem[] = alerts
+    .filter(alert => alert.daysLeft <= 30) // Show items due within 30 days
+    .map(alert => ({
+      id: alert.id || `alert-${alert.title}`,
+      title: alert.title,
+      subtitle: alert.daysLeft <= 0
+        ? `Overdue by ${Math.abs(alert.daysLeft)} days`
+        : alert.daysLeft <= 7
+        ? `Due in ${alert.daysLeft} day${alert.daysLeft !== 1 ? 's' : ''}`
+        : `Due in ${alert.daysLeft} days`,
+      daysLeft: alert.daysLeft,
+      type: alert.type === 'renewal' ? 'renewal' : 'policy',
+      icon: alert.type === 'renewal' ? '📅' : '🛡️',
+      color: alert.daysLeft <= 0 ? Colors.danger : alert.daysLeft <= 7 ? Colors.warning : Colors.primary,
+      route: alert.type === 'renewal' ? '/renewal-detail' : '/policy-detail',
+      routeParams: { id: alert.id || '' },
+    }))
+    .sort((a, b) => a.daysLeft - b.daysLeft); // Sort by urgency
+
+  const overdueCount = urgencyItems.filter(item => item.daysLeft <= 0).length;
+  const urgentCount = urgencyItems.filter(item => item.daysLeft > 0 && item.daysLeft <= 7).length;
+  const totalAttentionCount = overdueCount + urgentCount;
+
+  // Calculate family finances summary
+  const familyFinances = {
+    moneyGiven: stats?.total_loans_given || 0,
+    moneyTaken: stats?.total_loans_taken || 0,
+    netPosition: (stats?.total_loans_given || 0) - (stats?.total_loans_taken || 0),
+    activePolicies: stats?.active_policies || 0,
+    pendingVerifications: stats?.pending_verification || 0,
+  };
 
   if (isLoading) {
     return (
@@ -221,115 +299,256 @@ export default function DashboardScreen() {
               </Pressable>
             )}
 
-            {/* Urgent Alert Card */}
-            {alerts.length > 0 && (
-              <View style={[styles.alertCard, alerts[0].daysLeft <= 7 ? styles.alertCardRed : styles.alertCardAmber]}>
-                <View style={styles.alertHeader}>
-                  <View style={[styles.alertDot, alerts[0].daysLeft <= 7 && styles.alertDotRed]} />
-                  <Text style={[styles.alertLabel, alerts[0].daysLeft <= 7 && styles.alertLabelRed]}>
-                    {alerts[0].daysLeft <= 0 ? 'OVERDUE' : alerts[0].daysLeft <= 7 ? 'URGENT' : 'UPCOMING'}
-                  </Text>
-                </View>
-                <Text style={styles.alertTitle}>{alerts[0].title}</Text>
-                <Text style={styles.alertSubtitle}>
-                  {alerts[0].daysLeft <= 0
-                    ? `Expired ${Math.abs(alerts[0].daysLeft)} days ago`
-                    : `Expires in ${alerts[0].daysLeft} days`}
-                </Text>
-                <View style={styles.alertActions}>
-                  <Pressable style={styles.renewButton}>
-                    <Text style={styles.renewButtonText}>View Details</Text>
-                  </Pressable>
-                  {alerts.length > 1 && (
-                    <View style={styles.moreAlertsButton}>
-                      <Text style={styles.moreAlertsText}>+{alerts.length - 1} more</Text>
+            {/* Needs Attention Section */}
+            {totalAttentionCount > 0 && (
+              <View style={styles.attentionSection}>
+                <View style={styles.attentionHeader}>
+                  <View style={styles.attentionTitleRow}>
+                    <Text style={styles.attentionTitle}>Needs Attention</Text>
+                    <View style={styles.attentionBadge}>
+                      <Text style={styles.attentionBadgeText}>{totalAttentionCount}</Text>
                     </View>
+                  </View>
+                  {overdueCount > 0 && (
+                    <Text style={styles.attentionOverdueText}>
+                      {overdueCount} overdue
+                    </Text>
                   )}
                 </View>
+
+                {/* Urgency Items List */}
+                {urgencyItems.slice(0, 3).map((item, index) => (
+                  <Animated.View
+                    key={item.id}
+                    style={[
+                      styles.urgencyItem,
+                      item.daysLeft <= 0 && { transform: [{ scale: pulseAnim }] },
+                      item.daysLeft <= 0 && styles.urgencyItemOverdue,
+                      item.daysLeft > 0 && item.daysLeft <= 7 && styles.urgencyItemUrgent,
+                    ]}
+                  >
+                    <Pressable
+                      style={styles.urgencyItemContent}
+                      onPress={() => router.push({ pathname: item.route as any, params: item.routeParams })}
+                    >
+                      <View style={[styles.urgencyItemIcon, { backgroundColor: `${item.color}20` }]}>
+                        <Text style={styles.urgencyItemEmoji}>{item.icon}</Text>
+                      </View>
+                      <View style={styles.urgencyItemText}>
+                        <Text style={styles.urgencyItemTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={[styles.urgencyItemSubtitle, { color: item.color }]}>
+                          {item.subtitle}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={[styles.urgencyActionButton, { backgroundColor: item.color }]}
+                        onPress={() => router.push({
+                          pathname: item.route as any,
+                          params: { ...item.routeParams, action: 'renew' }
+                        })}
+                      >
+                        <Text style={styles.urgencyActionText}>
+                          {item.daysLeft <= 0 ? 'Fix Now' : 'Renew'}
+                        </Text>
+                      </Pressable>
+                    </Pressable>
+                  </Animated.View>
+                ))}
+
+                {/* See All Button */}
+                {urgencyItems.length > 3 && (
+                  <Pressable
+                    style={styles.seeAllButton}
+                    onPress={() => router.push('/renewals')}
+                  >
+                    <Text style={styles.seeAllText}>
+                      See all {urgencyItems.length} items
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                  </Pressable>
+                )}
               </View>
             )}
 
-            {/* Summary Cards */}
-            <View style={styles.summaryGrid}>
-              <Pressable style={styles.summaryCard} onPress={() => router.push('/(tabs)/loans')}>
-                <Text style={styles.summaryLabel}>LOAN LEDGER</Text>
-                <View style={styles.summaryContent}>
-                  <Text style={styles.summaryValue}>
-                    {formatCurrency(stats?.total_loans_given || 0)}
-                  </Text>
-                  <Text style={styles.summaryStatus}>
-                    {stats?.loans_given_count || 0} given • {stats?.loans_taken_count || 0} taken
-                  </Text>
-                  {stats?.pending_verification ? (
-                    <Text style={styles.summaryWarning}>
-                      {stats.pending_verification} pending verification
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
+            {/* Family Finances Snapshot */}
+            <View style={styles.financeCard}>
+              <Text style={styles.financeCardTitle}>Family Finances</Text>
 
-              <Pressable style={styles.summaryCard} onPress={() => router.push('/vault')}>
-                <Text style={styles.summaryLabel}>INSURANCE</Text>
-                <View style={styles.summaryContent}>
-                  <Text style={styles.summaryValue}>{stats?.active_policies || 0}</Text>
-                  <Text style={styles.summaryStatusMuted}>Active policies</Text>
-                  {stats?.expiring_soon_policies ? (
-                    <Text style={styles.summaryWarning}>
-                      {stats.expiring_soon_policies} expiring soon
-                    </Text>
-                  ) : null}
+              <View style={styles.financeGrid}>
+                {/* Net Position */}
+                <View style={styles.financeItem}>
+                  <Text style={styles.financeLabel}>Net Position</Text>
+                  <Text style={[
+                    styles.financeValue,
+                    familyFinances.netPosition >= 0 ? styles.financeValuePositive : styles.financeValueNegative
+                  ]}>
+                    {familyFinances.netPosition >= 0 ? '+' : ''}{formatCurrency(familyFinances.netPosition)}
+                  </Text>
+                  <Text style={styles.financeSubtext}>
+                    {formatCurrency(familyFinances.moneyGiven)} given • {formatCurrency(familyFinances.moneyTaken)} taken
+                  </Text>
                 </View>
-              </Pressable>
+
+                {/* Divider */}
+                <View style={styles.financeDivider} />
+
+                {/* Insurance Coverage */}
+                <View style={styles.financeItem}>
+                  <Text style={styles.financeLabel}>Protection</Text>
+                  <Text style={styles.financeValue}>
+                    {familyFinances.activePolicies} Policies
+                  </Text>
+                  <Text style={styles.financeSubtext}>
+                    {(stats?.expiring_soon_policies || 0) > 0
+                      ? `${stats?.expiring_soon_policies} expiring soon`
+                      : 'All policies active'
+                    }
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick Stats Row */}
+              <View style={styles.financeStatsRow}>
+                <Pressable style={styles.financeStat} onPress={() => router.push('/(tabs)/loans')}>
+                  <View style={[styles.financeStatIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                    <Text style={styles.financeStatEmoji}>💰</Text>
+                  </View>
+                  <View style={styles.financeStatText}>
+                    <Text style={styles.financeStatValue}>
+                      {(stats?.loans_given_count || 0) + (stats?.loans_taken_count || 0)}
+                    </Text>
+                    <Text style={styles.financeStatLabel}>Active Loans</Text>
+                  </View>
+                  {familyFinances.pendingVerifications > 0 && (
+                    <View style={styles.financeStatBadge}>
+                      <Text style={styles.financeStatBadgeText}>{familyFinances.pendingVerifications}</Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable style={styles.financeStat} onPress={() => router.push('/renewals')}>
+                  <View style={[styles.financeStatIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
+                    <Text style={styles.financeStatEmoji}>📅</Text>
+                  </View>
+                  <View style={styles.financeStatText}>
+                    <Text style={styles.financeStatValue}>
+                      {stats?.upcoming_renewals || 0}
+                    </Text>
+                    <Text style={styles.financeStatLabel}>Upcoming Renewals</Text>
+                  </View>
+                  {(stats?.overdue_renewals || 0) > 0 && (
+                    <View style={[styles.financeStatBadge, { backgroundColor: Colors.danger }]}>
+                      <Text style={styles.financeStatBadgeText}>{stats?.overdue_renewals}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
             </View>
 
-            {/* Renewals Card */}
-            <Pressable style={styles.renewalsCard} onPress={() => router.push('/renewals')}>
-              <View style={styles.renewalsHeader}>
-                <Text style={styles.renewalsIcon}>📅</Text>
-                <View style={styles.renewalsContent}>
-                  <Text style={styles.renewalsTitle}>Renewals</Text>
-                  <Text style={styles.renewalsSubtitle}>
-                    {stats?.upcoming_renewals || 0} upcoming • {stats?.overdue_renewals || 0} overdue
-                  </Text>
+            {/* Pillar Cards Grid */}
+            <Text style={styles.sectionTitle}>YOUR PILLARS</Text>
+            <View style={styles.pillarGrid}>
+              <Pressable style={styles.pillarCard} onPress={() => router.push('/(tabs)/loans')}>
+                <View style={[styles.pillarIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                  <Text style={styles.pillarEmoji}>💰</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-              </View>
-            </Pressable>
-
-            {/* Quick Actions */}
-            <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActions}>
-              <Pressable style={styles.quickAction} onPress={() => router.push({ pathname: '/add-loan', params: { type: 'given' } })}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                  <Text style={styles.quickActionEmoji}>💸</Text>
-                </View>
-                <Text style={styles.quickActionLabel}>Record Loan</Text>
+                <Text style={styles.pillarTitle}>Loan Ledger</Text>
+                <Text style={styles.pillarValue}>{formatCurrency(stats?.total_loans_given || 0)}</Text>
+                <Text style={styles.pillarSubtext}>
+                  {stats?.loans_given_count || 0}G • {stats?.loans_taken_count || 0}T
+                </Text>
               </Pressable>
 
-              <Pressable style={styles.quickAction} onPress={() => router.push('/add-insurance')}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                  <Text style={styles.quickActionEmoji}>🛡️</Text>
+              <Pressable style={styles.pillarCard} onPress={() => router.push('/vault')}>
+                <View style={[styles.pillarIcon, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                  <Text style={styles.pillarEmoji}>🛡️</Text>
                 </View>
-                <Text style={styles.quickActionLabel}>Add Policy</Text>
+                <Text style={styles.pillarTitle}>Insurance</Text>
+                <Text style={styles.pillarValue}>{stats?.active_policies || 0}</Text>
+                <Text style={styles.pillarSubtext}>Active policies</Text>
               </Pressable>
 
-              <Pressable style={styles.quickAction} onPress={() => router.push('/add-renewal')}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
-                  <Text style={styles.quickActionEmoji}>📋</Text>
+              <Pressable style={styles.pillarCard} onPress={() => router.push('/renewals')}>
+                <View style={[styles.pillarIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
+                  <Text style={styles.pillarEmoji}>📅</Text>
                 </View>
-                <Text style={styles.quickActionLabel}>Add Renewal</Text>
+                <Text style={styles.pillarTitle}>Renewals</Text>
+                <Text style={styles.pillarValue}>{stats?.upcoming_renewals || 0}</Text>
+                <Text style={styles.pillarSubtext}>
+                  {(stats?.overdue_renewals || 0) > 0 ? `${stats?.overdue_renewals} overdue` : 'On track'}
+                </Text>
               </Pressable>
 
-              <Pressable style={styles.quickAction} onPress={() => router.push('/family-members')}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(168, 85, 247, 0.15)' }]}>
-                  <Text style={styles.quickActionEmoji}>👨‍👩‍👧‍👦</Text>
+              <Pressable style={styles.pillarCard} onPress={() => router.push('/family-members')}>
+                <View style={[styles.pillarIcon, { backgroundColor: 'rgba(168, 85, 247, 0.15)' }]}>
+                  <Text style={styles.pillarEmoji}>👨‍👩‍👧‍👦</Text>
                 </View>
-                <Text style={styles.quickActionLabel}>Family</Text>
+                <Text style={styles.pillarTitle}>Family</Text>
+                <Text style={styles.pillarValue}>{currentWorkspace?.member_count || 1}</Text>
+                <Text style={styles.pillarSubtext}>Members</Text>
               </Pressable>
-            </ScrollView>
+            </View>
           </>
         )}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      {hasData && (
+        <>
+          {/* FAB Menu Overlay */}
+          {showFabMenu && (
+            <Pressable style={styles.fabOverlay} onPress={toggleFabMenu}>
+              <Animated.View style={[styles.fabMenuContainer]}>
+                <Pressable
+                  style={styles.fabMenuItem}
+                  onPress={() => {
+                    toggleFabMenu();
+                    router.push({ pathname: '/add-loan', params: { type: 'given' } });
+                  }}
+                >
+                  <View style={[styles.fabMenuIcon, { backgroundColor: 'rgba(99, 102, 241, 0.2)' }]}>
+                    <Text style={styles.fabMenuEmoji}>💸</Text>
+                  </View>
+                  <Text style={styles.fabMenuLabel}>Record Loan</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabMenuItem}
+                  onPress={() => {
+                    toggleFabMenu();
+                    router.push('/add-insurance');
+                  }}
+                >
+                  <View style={[styles.fabMenuIcon, { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}>
+                    <Text style={styles.fabMenuEmoji}>🛡️</Text>
+                  </View>
+                  <Text style={styles.fabMenuLabel}>Add Policy</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabMenuItem}
+                  onPress={() => {
+                    toggleFabMenu();
+                    router.push('/add-renewal');
+                  }}
+                >
+                  <View style={[styles.fabMenuIcon, { backgroundColor: 'rgba(251, 191, 36, 0.2)' }]}>
+                    <Text style={styles.fabMenuEmoji}>📅</Text>
+                  </View>
+                  <Text style={styles.fabMenuLabel}>Add Renewal</Text>
+                </Pressable>
+              </Animated.View>
+            </Pressable>
+          )}
+
+          {/* FAB Button */}
+          <Pressable style={styles.fab} onPress={toggleFabMenu}>
+            <Animated.View style={{ transform: [{ rotate: fabRotateInterpolate }] }}>
+              <Ionicons name="add" size={28} color={Colors.text} />
+            </Animated.View>
+          </Pressable>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -717,5 +936,317 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+
+  // Needs Attention Section
+  attentionSection: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius['2xl'],
+    padding: 16,
+    marginBottom: 20,
+  },
+  attentionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  attentionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  attentionTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    fontSize: 16,
+  },
+  attentionBadge: {
+    backgroundColor: Colors.danger,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  attentionBadgeText: {
+    color: Colors.text,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  attentionOverdueText: {
+    ...Typography.caption,
+    color: Colors.danger,
+  },
+
+  // Urgency Items
+  urgencyItem: {
+    marginBottom: 10,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+  },
+  urgencyItemOverdue: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  urgencyItemUrgent: {
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.25)',
+  },
+  urgencyItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  urgencyItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgencyItemEmoji: {
+    fontSize: 18,
+  },
+  urgencyItemText: {
+    flex: 1,
+  },
+  urgencyItemTitle: {
+    ...Typography.body,
+    color: Colors.text,
+    fontSize: 14,
+  },
+  urgencyItemSubtitle: {
+    ...Typography.caption,
+    marginTop: 2,
+  },
+  urgencyActionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+  },
+  urgencyActionText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+    gap: 4,
+  },
+  seeAllText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+
+  // Family Finances Card
+  financeCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius['2xl'],
+    padding: 18,
+    marginBottom: 20,
+  },
+  financeCardTitle: {
+    ...Typography.label,
+    color: Colors.textMuted,
+    marginBottom: 14,
+    letterSpacing: 1.2,
+  },
+  financeGrid: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  financeItem: {
+    flex: 1,
+    paddingVertical: 4,
+  },
+  financeLabel: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginBottom: 6,
+  },
+  financeValue: {
+    fontSize: 22,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  financeValuePositive: {
+    color: '#22c55e',
+  },
+  financeValueNegative: {
+    color: Colors.danger,
+  },
+  financeSubtext: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+  },
+  financeDivider: {
+    width: 1,
+    backgroundColor: Colors.surfaceBorder,
+    marginHorizontal: 16,
+  },
+  financeStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+  },
+  financeStat: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  financeStatIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  financeStatEmoji: {
+    fontSize: 16,
+  },
+  financeStatText: {
+    flex: 1,
+  },
+  financeStatValue: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.text,
+  },
+  financeStatLabel: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: 9,
+  },
+  financeStatBadge: {
+    backgroundColor: Colors.warning,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  financeStatBadgeText: {
+    color: Colors.text,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+  },
+
+  // Pillar Cards Grid
+  pillarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  pillarCard: {
+    width: '48%',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: BorderRadius.xl,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pillarIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  pillarEmoji: {
+    fontSize: 20,
+  },
+  pillarTitle: {
+    ...Typography.bodySm,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  pillarValue: {
+    fontSize: 20,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  pillarSubtext: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: 10,
+  },
+
+  // FAB (Floating Action Button)
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingBottom: 170,
+    paddingRight: 24,
+  },
+  fabMenuContainer: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: 8,
+    minWidth: 180,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  fabMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+    borderRadius: BorderRadius.md,
+  },
+  fabMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabMenuEmoji: {
+    fontSize: 18,
+  },
+  fabMenuLabel: {
+    ...Typography.body,
+    color: Colors.text,
+    fontSize: 14,
   },
 });
