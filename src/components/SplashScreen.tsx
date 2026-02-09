@@ -90,7 +90,7 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
           <View style={styles.logoWrapper}>
             <View style={styles.logoGlow} />
             <Image
-              source={require('../../../assets/icon.png')}
+              source={require('../../assets/icon.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
