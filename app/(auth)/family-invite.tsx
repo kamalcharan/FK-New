@@ -49,11 +49,30 @@ interface Invite {
   sent_at: string;
 }
 
+// Pain point context for messaging
+const PAIN_POINT_CONTEXT: Record<string, { badge: string; hope: string }> = {
+  insurance: {
+    badge: '🛡️ Your first policy is saved',
+    hope: 'Now make sure your family can always find it.',
+  },
+  loans: {
+    badge: '💰 Your first loan is recorded',
+    hope: 'Now make sure your family remembers it too.',
+  },
+  compliance: {
+    badge: '📋 Your first compliance is tracked',
+    hope: 'Now make sure your family never misses it.',
+  },
+};
+
 export default function FamilyInviteScreen() {
-  const { workspaceName, workspaceId } = useLocalSearchParams<{
+  const { workspaceName, workspaceId, painPoint } = useLocalSearchParams<{
     workspaceName?: string;
     workspaceId?: string;
+    painPoint?: string;
   }>();
+
+  const painContext = painPoint ? PAIN_POINT_CONTEXT[painPoint] : null;
 
   const [selectedRelation, setSelectedRelation] = useState<typeof CONSTELLATION_RELATIONSHIPS[0] | null>(null);
   const [inviteeName, setInviteeName] = useState('');
@@ -191,10 +210,17 @@ export default function FamilyInviteScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.stepIndicator}>STEP 2 OF 2</Text>
+        <Text style={styles.buildingTag}>BUILDING YOUR FAMILY'S SECOND BRAIN</Text>
+
+        {painContext && (
+          <View style={styles.hopeBadge}>
+            <Text style={styles.hopeBadgeText}>{painContext.badge}</Text>
+          </View>
+        )}
+
         <Text style={styles.title}>Invite Your Family</Text>
         <Text style={styles.subtitle}>
-          Tap a relationship to send an invite via WhatsApp
+          {painContext ? painContext.hope : 'Tap a relationship to send an invite via WhatsApp'}
         </Text>
       </View>
 
@@ -394,12 +420,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     alignItems: 'center',
   },
-  stepIndicator: {
-    color: '#6366f1',
-    fontSize: 11,
-    fontWeight: '700',
+  buildingTag: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.primary,
     letterSpacing: 2,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  hopeBadge: {
+    backgroundColor: Colors.successMuted,
+    borderWidth: 1,
+    borderColor: Colors.successBorder,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: Spacing.md,
+  },
+  hopeBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: Colors.success,
+    textAlign: 'center',
   },
   title: {
     fontFamily: 'Fraunces_600SemiBold',
