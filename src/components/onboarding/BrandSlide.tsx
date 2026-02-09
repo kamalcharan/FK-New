@@ -1,10 +1,8 @@
 // src/components/onboarding/BrandSlide.tsx
 import { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, Animated } from 'react-native';
 import { Colors, Spacing } from '../../constants/theme';
 import { Button } from '../ui/Button';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface BrandSlideProps {
   onGetStarted: () => void;
@@ -55,9 +53,6 @@ export function BrandSlide({ onGetStarted }: BrandSlideProps) {
 
   return (
     <View style={styles.container}>
-      {/* Subtle glow behind logo */}
-      <View style={styles.glowBackground} />
-
       <View style={styles.content}>
         {/* Logo */}
         <Animated.View
@@ -114,15 +109,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  glowBackground: {
-    position: 'absolute',
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: Colors.primary,
-    opacity: 0.08,
-    top: SCREEN_HEIGHT * 0.25,
   },
   content: {
     alignItems: 'center',
