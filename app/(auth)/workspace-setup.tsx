@@ -230,20 +230,7 @@ export default function WorkspaceSetupScreen() {
               loading={isLoading}
             />
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Button
-              title="Join Existing Vault"
-              variant="secondary"
-              onPress={() => {
-                setShowJoinForm(true);
-                setError('');
-              }}
-            />
+{/* Join Existing Vault hidden - invite code flow handles this via verify-invite screen */}
           </>
         )}
       </View>

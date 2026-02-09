@@ -1,5 +1,5 @@
 // app/(auth)/family-invite.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Share, ScrollView, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Share, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -196,7 +196,14 @@ export default function FamilyInviteScreen() {
   };
 
   const handleSkip = () => {
-    handleContinue();
+    Alert.alert(
+      'Skip inviting family?',
+      'Your vault holds critical family information — insurance, loans, compliance. Inviting members ensures nothing is ever lost.\n\nAre you sure you want to skip?',
+      [
+        { text: 'Invite Now', style: 'cancel' },
+        { text: 'Skip', style: 'destructive', onPress: handleContinue },
+      ]
+    );
   };
 
   const displayName = useMemo(() => {
