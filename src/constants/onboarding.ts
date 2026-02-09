@@ -27,7 +27,7 @@ export const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
     id: 'loans',
     type: 'story',
-    badge: '\u20B92,00,000 \u2022 Lent to cousin \u2022 March 2023',
+    badge: '\u20B92,00,000 \u2022 Lent to family \u2022 March 2023',
     badgeColor: '#fbbf24',
     title: '\u201CWho remembers this loan?\u201D',
     subtitle: 'Families lend freely. But nobody writes it down. 18 months later, it\u2019s \u20B92 lakh or \u20B93 lakh \u2014 depending on who you ask.',
