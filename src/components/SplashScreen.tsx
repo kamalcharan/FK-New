@@ -1,6 +1,6 @@
 // src/components/SplashScreen.tsx
 import { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions, Image } from 'react-native';
 import { Colors } from '../constants/theme';
 
 const { height } = Dimensions.get('window');
@@ -86,16 +86,15 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
             }
           ]}
         >
-          {/* Logo circle with glow */}
+          {/* Logo with glow */}
           <View style={styles.logoWrapper}>
             <View style={styles.logoGlow} />
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>FK</Text>
-            </View>
+            <Image
+              source={require('../../../assets/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
-
-          {/* App name */}
-          <Text style={styles.appName}>FamilyKnows</Text>
         </Animated.View>
 
         {/* Tagline section - directly below logo */}
@@ -151,35 +150,17 @@ const styles = StyleSheet.create({
   },
   logoGlow: {
     position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     backgroundColor: Colors.primary,
     opacity: 0.15,
-    top: -10,
-    left: -10,
+    top: -20,
+    left: -20,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 40,
-    color: Colors.text,
-    letterSpacing: 3,
-  },
-  appName: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 36,
-    color: Colors.text,
-    letterSpacing: 1,
+  logoImage: {
+    width: 160,
+    height: 160,
   },
   taglineContainer: {
     alignItems: 'center',

@@ -326,9 +326,7 @@ export default function VaultScreen() {
             <Text style={styles.title}>Insurance Vault</Text>
             <Text style={styles.subtitle}>{policies.length} policies</Text>
           </View>
-          <Pressable style={styles.emergencyButton} onPress={() => setShowEmergencyModal(true)}>
-            <Text style={styles.emergencyButtonIcon}>🆘</Text>
-          </Pressable>
+{/* SOS emergency button hidden - not implemented yet */}
         </View>
 
         {/* Filter Tabs */}
@@ -450,7 +448,7 @@ export default function VaultScreen() {
         <Ionicons name="add" size={28} color="#000" />
       </Pressable>
 
-      {renderEmergencyModal()}
+{/* Emergency modal hidden - not implemented yet */}
     </SafeAreaView>
   );
 }

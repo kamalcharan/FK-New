@@ -240,10 +240,7 @@ export default function RenewalsScreen() {
             <Text style={styles.headerSubtitle}>{currentWorkspace?.name || 'Family Vault'}</Text>
           </View>
         </View>
-        <Pressable style={styles.notificationButton}>
-          <Ionicons name="notifications-outline" size={22} color={Colors.text} />
-          {needsAttentionCount > 0 && <View style={styles.notificationDot} />}
-        </Pressable>
+{/* Notification button hidden - not implemented yet */}
       </View>
 
       <ScrollView

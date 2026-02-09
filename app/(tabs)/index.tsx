@@ -191,9 +191,7 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>{getGreeting()}, {firstName}</Text>
             <Text style={styles.workspaceName}>{currentWorkspace?.name || 'Family Vault'}</Text>
           </View>
-          <Pressable style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
-          </Pressable>
+{/* Notification button hidden - not implemented yet */}
         </View>
 
         {/* Empty State - Show when no data */}
