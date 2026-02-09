@@ -15,11 +15,12 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { useAppSelector } from '../src/store';
-import { getRenewals, getRenewalPresets, isSupabaseReady, RenewalPreset } from '../src/lib/supabase';
+import { getRenewals, getRenewalPresets, isSupabaseReady, RenewalPreset, getOnboardingContext } from '../src/lib/supabase';
 import {
   calculateDaysUntilExpiry,
   getRenewalUrgencyStatus,
   getCategoryIcon,
+  getIndustryByCode,
 } from '../src/constants/renewals';
 
 interface Renewal {
@@ -36,21 +37,63 @@ interface Renewal {
   is_demo?: boolean;
 }
 
-// Quick add presets to show
-const QUICK_ADD_PRESETS = [
+// Default quick add presets (used when no industry context available)
+const DEFAULT_QUICK_ADD_PRESETS = [
   { code: 'fssai_license', icon: '🍽️', title: 'FSSAI License' },
   { code: 'property_tax', icon: '🏠', title: 'Property Tax' },
   { code: 'vehicle_insurance', icon: '🚗', title: 'Vehicle Insurance' },
   { code: 'trade_license', icon: '🏪', title: 'Trade License' },
 ];
 
+// Industry-specific quick add with proper display info
+const INDUSTRY_QUICK_ADD: Record<string, { code: string; icon: string; title: string }[]> = {
+  food_service: [
+    { code: 'fssai_license', icon: '🍽️', title: 'FSSAI License' },
+    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
+    { code: 'trade_license', icon: '📜', title: 'Trade License' },
+    { code: 'health_license', icon: '🏥', title: 'Health License' },
+  ],
+  retail: [
+    { code: 'trade_license', icon: '📜', title: 'Trade License' },
+    { code: 'gst_filing', icon: '📊', title: 'GST Return' },
+    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
+    { code: 'shop_establishment', icon: '🏪', title: 'Shop License' },
+  ],
+  manufacturing: [
+    { code: 'pollution_consent', icon: '🏭', title: 'Pollution Board' },
+    { code: 'factory_license', icon: '⚙️', title: 'Factory License' },
+    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
+    { code: 'labour_license', icon: '👷', title: 'Labour License' },
+  ],
+  real_estate: [
+    { code: 'property_tax', icon: '🏠', title: 'Property Tax' },
+    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
+    { code: 'building_plan_approval', icon: '📐', title: 'Building Plan' },
+    { code: 'occupancy_certificate', icon: '🏗️', title: 'Occupancy Cert' },
+  ],
+  healthcare: [
+    { code: 'clinical_establishment', icon: '🏥', title: 'Clinic License' },
+    { code: 'biomedical_waste', icon: '⚕️', title: 'Biomedical Waste' },
+    { code: 'drug_license', icon: '💊', title: 'Drug License' },
+    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
+  ],
+  professional: [
+    { code: 'gst_filing', icon: '📊', title: 'GST Return' },
+    { code: 'professional_tax', icon: '👔', title: 'Professional Tax' },
+    { code: 'trade_license', icon: '📜', title: 'Trade License' },
+    { code: 'shop_establishment', icon: '🏪', title: 'Shop License' },
+  ],
+};
+
 export default function RenewalsScreen() {
   const router = useRouter();
   const { currentWorkspace } = useAppSelector(state => state.workspace);
+  const { user } = useAppSelector(state => state.auth);
 
   const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [quickAddPresets, setQuickAddPresets] = useState(DEFAULT_QUICK_ADD_PRESETS);
 
   // Pulsing animation for overdue cards
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -87,8 +130,16 @@ export default function RenewalsScreen() {
     }
 
     try {
-      const data = await getRenewals(currentWorkspace.id);
+      const [data, onboardingCtx] = await Promise.all([
+        getRenewals(currentWorkspace.id),
+        user?.id ? getOnboardingContext(user.id) : Promise.resolve(null),
+      ]);
       setRenewals(data || []);
+
+      // Personalize quick-add based on industry
+      if (onboardingCtx?.industry && INDUSTRY_QUICK_ADD[onboardingCtx.industry]) {
+        setQuickAddPresets(INDUSTRY_QUICK_ADD[onboardingCtx.industry]);
+      }
     } catch (err) {
       console.error('Error loading renewals:', err);
     } finally {
@@ -269,7 +320,7 @@ export default function RenewalsScreen() {
             {/* Quick Add Presets in Empty State */}
             <Text style={styles.quickAddTitle}>QUICK ADD</Text>
             <View style={styles.quickAddGrid}>
-              {QUICK_ADD_PRESETS.map((preset) => (
+              {quickAddPresets.map((preset) => (
                 <Pressable
                   key={preset.code}
                   style={styles.quickAddCard}
@@ -305,7 +356,7 @@ export default function RenewalsScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Quick Add Presets</Text>
               <View style={styles.quickAddGrid}>
-                {QUICK_ADD_PRESETS.map((preset) => (
+                {quickAddPresets.map((preset) => (
                   <Pressable
                     key={preset.code}
                     style={styles.quickAddCard}

@@ -30,6 +30,7 @@ import {
   markInterestConverted,
   getSameCategoryPresets,
   searchRenewalPresets,
+  getOnboardingContext,
   RenewalStory,
   RenewalBundle,
   RenewalPreset,
@@ -38,6 +39,7 @@ import {
   formatCostRange,
   getCategoryIcon,
   CATEGORY_INFO,
+  getIndustryByCode,
 } from '../src/constants/renewals';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -109,11 +111,12 @@ export default function AddRenewalScreen() {
 
   const loadData = async () => {
     try {
-      const [storiesData, bundlesData, presetsData, existingRenewals] = await Promise.all([
+      const [storiesData, bundlesData, presetsData, existingRenewals, onboardingCtx] = await Promise.all([
         getRenewalStories(),
         getRenewalBundles(),
         getRenewalPresets(),
         currentWorkspace?.id ? getRenewals(currentWorkspace.id) : Promise.resolve([]),
+        user?.id ? getOnboardingContext(user.id) : Promise.resolve(null),
       ]);
 
       setStories(storiesData);
@@ -136,6 +139,18 @@ export default function AddRenewalScreen() {
         return acc;
       }, {} as Record<string, RenewalPreset[]>);
       setPresetsByCategory(grouped);
+
+      // If user has industry context and no preset code param, auto-select their bundle
+      if (onboardingCtx?.industry && !params.presetCode && !params.showStories) {
+        const industryConfig = getIndustryByCode(onboardingCtx.industry);
+        if (industryConfig?.bundleCode) {
+          const matchingBundle = bundlesData.find(b => b.code === industryConfig.bundleCode);
+          if (matchingBundle) {
+            setSelectedBundle(matchingBundle);
+            setStep('stack');
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading renewal data:', error);
     } finally {

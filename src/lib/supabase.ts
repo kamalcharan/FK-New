@@ -1224,6 +1224,58 @@ export const updateUserProfile = async (
   return data;
 };
 
+// Update onboarding context in profile metadata (merge, not replace)
+export const updateOnboardingContext = async (
+  userId: string,
+  context: Record<string, any>
+) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Read current metadata first, then merge
+  const { data: profile, error: readError } = await supabase
+    .from('fk_user_profiles')
+    .select('metadata')
+    .eq('user_id', userId)
+    .single();
+
+  if (readError && readError.code !== 'PGRST116') throw readError;
+
+  const existingMetadata = profile?.metadata || {};
+  const updatedMetadata = {
+    ...existingMetadata,
+    onboarding: {
+      ...(existingMetadata.onboarding || {}),
+      ...context,
+    },
+  };
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .update({ metadata: updatedMetadata })
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Get onboarding context from profile metadata
+export const getOnboardingContext = async (
+  userId: string
+): Promise<{ pain_point?: string; industry?: string } | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('fk_user_profiles')
+    .select('metadata')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) return null;
+  return data?.metadata?.onboarding || null;
+};
+
 // Check if fk_users record exists (needed for foreign key constraints)
 export const checkFkUserExists = async (userId: string): Promise<boolean> => {
   if (!supabase) return false;

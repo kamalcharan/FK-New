@@ -1,8 +1,11 @@
 // app/(auth)/pain-point.tsx
+import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
+import { updateOnboardingContext, isSupabaseReady } from '../../src/lib/supabase';
+import { useAppSelector } from '../../src/hooks/useStore';
 
 const PAIN_POINTS = [
   {
@@ -33,15 +36,41 @@ const PAIN_POINTS = [
 
 export default function PainPointScreen() {
   const { userName } = useLocalSearchParams<{ userName?: string }>();
+  const { user } = useAppSelector(state => state.auth);
+  const [isNavigating, setIsNavigating] = useState(false);
 
-  const handleSelect = (painPointId: string) => {
-    router.replace({
-      pathname: '/(auth)/workspace-setup',
-      params: {
-        userName: userName || '',
-        painPoint: painPointId,
-      },
-    });
+  const handleSelect = async (painPointId: string) => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+
+    // Save pain point to profile metadata
+    try {
+      if (isSupabaseReady() && user?.id) {
+        await updateOnboardingContext(user.id, { pain_point: painPointId });
+      }
+    } catch (err) {
+      console.error('[PainPoint] Failed to save context:', err);
+      // Continue navigation even if save fails
+    }
+
+    // Compliance users go to industry picker first
+    if (painPointId === 'compliance') {
+      router.replace({
+        pathname: '/(auth)/industry-picker',
+        params: {
+          userName: userName || '',
+          painPoint: painPointId,
+        },
+      });
+    } else {
+      router.replace({
+        pathname: '/(auth)/workspace-setup',
+        params: {
+          userName: userName || '',
+          painPoint: painPointId,
+        },
+      });
+    }
   };
 
   return (

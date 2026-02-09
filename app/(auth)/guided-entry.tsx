@@ -23,6 +23,7 @@ import {
   getCurrentUser,
 } from '../../src/lib/supabase';
 import { showSuccessToast, showErrorToast } from '../../src/components/ToastConfig';
+import { getIndustryByCode } from '../../src/constants/renewals';
 
 // Pain point configs
 const PAIN_POINT_CONFIG = {
@@ -56,7 +57,8 @@ const INSURANCE_TYPES = [
   { code: 'property', label: 'Home', icon: '🏠' },
 ];
 
-const COMPLIANCE_PRESETS = [
+// Default compliance presets (fallback when no industry selected)
+const DEFAULT_COMPLIANCE_PRESETS = [
   { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
   { code: 'trade_license', label: 'Trade License', icon: '📜' },
   { code: 'fssai', label: 'FSSAI', icon: '🍽️' },
@@ -64,16 +66,68 @@ const COMPLIANCE_PRESETS = [
   { code: 'other', label: 'Other', icon: '📋' },
 ];
 
+// Industry-specific compliance presets
+const INDUSTRY_COMPLIANCE_PRESETS: Record<string, { code: string; label: string; icon: string }[]> = {
+  food_service: [
+    { code: 'fssai_license', label: 'FSSAI License', icon: '🍽️' },
+    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
+    { code: 'trade_license', label: 'Trade License', icon: '📜' },
+    { code: 'health_license', label: 'Health License', icon: '🏥' },
+  ],
+  retail: [
+    { code: 'trade_license', label: 'Trade License', icon: '📜' },
+    { code: 'gst_filing', label: 'GST Return', icon: '📊' },
+    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
+    { code: 'shop_establishment', label: 'Shop License', icon: '🏪' },
+  ],
+  manufacturing: [
+    { code: 'pollution_consent', label: 'Pollution Board', icon: '🏭' },
+    { code: 'factory_license', label: 'Factory License', icon: '⚙️' },
+    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
+    { code: 'labour_license', label: 'Labour License', icon: '👷' },
+  ],
+  real_estate: [
+    { code: 'property_tax', label: 'Property Tax', icon: '🏠' },
+    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
+    { code: 'building_plan_approval', label: 'Building Plan', icon: '📐' },
+    { code: 'occupancy_certificate', label: 'Occupancy Cert', icon: '🏗️' },
+  ],
+  healthcare: [
+    { code: 'clinical_establishment', label: 'Clinic License', icon: '🏥' },
+    { code: 'biomedical_waste', label: 'Biomedical Waste', icon: '⚕️' },
+    { code: 'drug_license', label: 'Drug License', icon: '💊' },
+    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
+  ],
+  professional: [
+    { code: 'gst_filing', label: 'GST Return', icon: '📊' },
+    { code: 'professional_tax', label: 'Professional Tax', icon: '👔' },
+    { code: 'trade_license', label: 'Trade License', icon: '📜' },
+    { code: 'shop_establishment', label: 'Shop License', icon: '🏪' },
+  ],
+};
+
+function getCompliancePresets(industryCode?: string) {
+  if (industryCode && INDUSTRY_COMPLIANCE_PRESETS[industryCode]) {
+    return INDUSTRY_COMPLIANCE_PRESETS[industryCode];
+  }
+  return DEFAULT_COMPLIANCE_PRESETS;
+}
+
 export default function GuidedEntryScreen() {
-  const { painPoint, workspaceName, workspaceId } = useLocalSearchParams<{
+  const { painPoint, workspaceName, workspaceId, industry } = useLocalSearchParams<{
     painPoint?: string;
     workspaceName?: string;
     workspaceId?: string;
+    industry?: string;
   }>();
 
   const { user } = useAppSelector(state => state.auth);
   const activePainPoint = (painPoint || 'insurance') as keyof typeof PAIN_POINT_CONFIG;
   const config = PAIN_POINT_CONFIG[activePainPoint];
+
+  // Get industry-specific compliance presets
+  const compliancePresets = getCompliancePresets(industry);
+  const industryConfig = industry ? getIndustryByCode(industry) : undefined;
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -92,8 +146,8 @@ export default function GuidedEntryScreen() {
   const [showLoanDatePicker, setShowLoanDatePicker] = useState(false);
   const [loanPurpose, setLoanPurpose] = useState('');
 
-  // Compliance fields
-  const [complianceType, setComplianceType] = useState('fire_noc');
+  // Compliance fields — default to first industry-relevant preset
+  const [complianceType, setComplianceType] = useState(compliancePresets[0]?.code || 'fire_noc');
   const [complianceExpiry, setComplianceExpiry] = useState(new Date());
   const [showComplianceDatePicker, setShowComplianceDatePicker] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -207,7 +261,7 @@ export default function GuidedEntryScreen() {
         return;
       }
 
-      const preset = COMPLIANCE_PRESETS.find(p => p.code === complianceType);
+      const preset = compliancePresets.find(p => p.code === complianceType);
 
       await createRenewal({
         workspace_id: workspaceId || 'demo-workspace',
@@ -398,10 +452,18 @@ export default function GuidedEntryScreen() {
   // --- Render Compliance Form ---
   const renderComplianceForm = () => (
     <>
+      {industryConfig && (
+        <View style={styles.industryBadge}>
+          <Text style={styles.industryBadgeText}>
+            {industryConfig.icon} Showing compliance for {industryConfig.label}
+          </Text>
+        </View>
+      )}
+
       <View>
         <Text style={styles.label}>COMPLIANCE TYPE</Text>
         <View style={styles.chipRow}>
-          {COMPLIANCE_PRESETS.map((preset) => (
+          {compliancePresets.map((preset) => (
             <Pressable
               key={preset.code}
               style={[styles.chip, complianceType === preset.code && styles.chipSelected]}
@@ -640,5 +702,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: Colors.textMuted,
+  },
+  industryBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: Spacing.md,
+    alignSelf: 'flex-start',
+  },
+  industryBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: Colors.primary,
   },
 });
