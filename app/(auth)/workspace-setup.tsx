@@ -11,7 +11,7 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/co
 
 export default function WorkspaceSetupScreen() {
   const dispatch = useAppDispatch();
-  const { userName, painPoint, industry } = useLocalSearchParams<{ userName?: string; painPoint?: string; industry?: string }>();
+  const { userName, painPoint, persona } = useLocalSearchParams<{ userName?: string; painPoint?: string; persona?: string }>();
 
   const [vaultName, setVaultName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -50,7 +50,7 @@ export default function WorkspaceSetupScreen() {
             painPoint: painPoint || 'insurance',
             workspaceName: vaultName.trim(),
             workspaceId: 'demo-workspace',
-            industry: industry || '',
+            persona: persona || '',
           },
         });
         return;
@@ -86,7 +86,7 @@ export default function WorkspaceSetupScreen() {
           painPoint: painPoint || 'insurance',
           workspaceName: workspace.name,
           workspaceId: workspace.id,
-          industry: industry || '',
+          persona: persona || '',
         },
       });
     } catch (err: any) {

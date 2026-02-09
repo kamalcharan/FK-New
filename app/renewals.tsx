@@ -15,12 +15,11 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, GlassStyle, BorderRadius, Spacing } from '../src/constants/theme';
 import { useAppSelector } from '../src/store';
-import { getRenewals, getRenewalPresets, isSupabaseReady, RenewalPreset, getOnboardingContext } from '../src/lib/supabase';
+import { getRenewals, getRenewalPresets, isSupabaseReady, RenewalPreset, getOnboardingContext, getRenewalBundleByCode } from '../src/lib/supabase';
 import {
   calculateDaysUntilExpiry,
   getRenewalUrgencyStatus,
   getCategoryIcon,
-  getIndustryByCode,
 } from '../src/constants/renewals';
 
 interface Renewal {
@@ -37,53 +36,13 @@ interface Renewal {
   is_demo?: boolean;
 }
 
-// Default quick add presets (used when no industry context available)
+// Default quick add presets (used when no persona context available)
 const DEFAULT_QUICK_ADD_PRESETS = [
   { code: 'fssai_license', icon: '🍽️', title: 'FSSAI License' },
   { code: 'property_tax', icon: '🏠', title: 'Property Tax' },
   { code: 'vehicle_insurance', icon: '🚗', title: 'Vehicle Insurance' },
   { code: 'trade_license', icon: '🏪', title: 'Trade License' },
 ];
-
-// Industry-specific quick add with proper display info
-const INDUSTRY_QUICK_ADD: Record<string, { code: string; icon: string; title: string }[]> = {
-  food_service: [
-    { code: 'fssai_license', icon: '🍽️', title: 'FSSAI License' },
-    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
-    { code: 'trade_license', icon: '📜', title: 'Trade License' },
-    { code: 'health_license', icon: '🏥', title: 'Health License' },
-  ],
-  retail: [
-    { code: 'trade_license', icon: '📜', title: 'Trade License' },
-    { code: 'gst_filing', icon: '📊', title: 'GST Return' },
-    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
-    { code: 'shop_establishment', icon: '🏪', title: 'Shop License' },
-  ],
-  manufacturing: [
-    { code: 'pollution_consent', icon: '🏭', title: 'Pollution Board' },
-    { code: 'factory_license', icon: '⚙️', title: 'Factory License' },
-    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
-    { code: 'labour_license', icon: '👷', title: 'Labour License' },
-  ],
-  real_estate: [
-    { code: 'property_tax', icon: '🏠', title: 'Property Tax' },
-    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
-    { code: 'building_plan_approval', icon: '📐', title: 'Building Plan' },
-    { code: 'occupancy_certificate', icon: '🏗️', title: 'Occupancy Cert' },
-  ],
-  healthcare: [
-    { code: 'clinical_establishment', icon: '🏥', title: 'Clinic License' },
-    { code: 'biomedical_waste', icon: '⚕️', title: 'Biomedical Waste' },
-    { code: 'drug_license', icon: '💊', title: 'Drug License' },
-    { code: 'fire_noc', icon: '🔥', title: 'Fire NOC' },
-  ],
-  professional: [
-    { code: 'gst_filing', icon: '📊', title: 'GST Return' },
-    { code: 'professional_tax', icon: '👔', title: 'Professional Tax' },
-    { code: 'trade_license', icon: '📜', title: 'Trade License' },
-    { code: 'shop_establishment', icon: '🏪', title: 'Shop License' },
-  ],
-};
 
 export default function RenewalsScreen() {
   const router = useRouter();
@@ -130,15 +89,31 @@ export default function RenewalsScreen() {
     }
 
     try {
-      const [data, onboardingCtx] = await Promise.all([
+      const [data, onboardingCtx, allPresets] = await Promise.all([
         getRenewals(currentWorkspace.id),
         user?.id ? getOnboardingContext(user.id) : Promise.resolve(null),
+        getRenewalPresets(),
       ]);
       setRenewals(data || []);
 
-      // Personalize quick-add based on industry
-      if (onboardingCtx?.industry && INDUSTRY_QUICK_ADD[onboardingCtx.industry]) {
-        setQuickAddPresets(INDUSTRY_QUICK_ADD[onboardingCtx.industry]);
+      // Personalize quick-add based on persona bundle
+      if (onboardingCtx?.persona) {
+        const bundle = await getRenewalBundleByCode(onboardingCtx.persona);
+        if (bundle && bundle.preset_codes.length > 0) {
+          const resolved = bundle.preset_codes
+            .slice(0, 4) // Show max 4 quick-add items
+            .map(code => {
+              const preset = allPresets.find(p => p.code === code);
+              return preset
+                ? { code: preset.code, icon: preset.icon || '📋', title: preset.title }
+                : null;
+            })
+            .filter(Boolean) as { code: string; icon: string; title: string }[];
+
+          if (resolved.length > 0) {
+            setQuickAddPresets(resolved);
+          }
+        }
       }
     } catch (err) {
       console.error('Error loading renewals:', err);

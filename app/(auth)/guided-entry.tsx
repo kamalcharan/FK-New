@@ -1,5 +1,5 @@
 // app/(auth)/guided-entry.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,9 +22,12 @@ import {
   createRenewal,
   isSupabaseReady,
   getCurrentUser,
+  getRenewalBundleByCode,
+  getRenewalPresets,
+  RenewalPreset,
+  RenewalBundle,
 } from '../../src/lib/supabase';
 import { showSuccessToast, showErrorToast } from '../../src/components/ToastConfig';
-import { getIndustryByCode } from '../../src/constants/renewals';
 
 // Pain point configs
 const PAIN_POINT_CONFIG = {
@@ -57,8 +61,8 @@ const INSURANCE_TYPES = [
   { code: 'property', label: 'Home', icon: '🏠' },
 ];
 
-// Default compliance presets (fallback when no industry selected)
-const DEFAULT_COMPLIANCE_PRESETS = [
+// Fallback compliance presets (used when no persona bundle or DB unavailable)
+const FALLBACK_COMPLIANCE_PRESETS: { code: string; label: string; icon: string }[] = [
   { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
   { code: 'trade_license', label: 'Trade License', icon: '📜' },
   { code: 'fssai', label: 'FSSAI', icon: '🍽️' },
@@ -66,75 +70,68 @@ const DEFAULT_COMPLIANCE_PRESETS = [
   { code: 'other', label: 'Other', icon: '📋' },
 ];
 
-// Industry-specific compliance presets
-const INDUSTRY_COMPLIANCE_PRESETS: Record<string, { code: string; label: string; icon: string }[]> = {
-  food_service: [
-    { code: 'fssai_license', label: 'FSSAI License', icon: '🍽️' },
-    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
-    { code: 'trade_license', label: 'Trade License', icon: '📜' },
-    { code: 'health_license', label: 'Health License', icon: '🏥' },
-  ],
-  retail: [
-    { code: 'trade_license', label: 'Trade License', icon: '📜' },
-    { code: 'gst_filing', label: 'GST Return', icon: '📊' },
-    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
-    { code: 'shop_establishment', label: 'Shop License', icon: '🏪' },
-  ],
-  manufacturing: [
-    { code: 'pollution_consent', label: 'Pollution Board', icon: '🏭' },
-    { code: 'factory_license', label: 'Factory License', icon: '⚙️' },
-    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
-    { code: 'labour_license', label: 'Labour License', icon: '👷' },
-  ],
-  real_estate: [
-    { code: 'property_tax', label: 'Property Tax', icon: '🏠' },
-    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
-    { code: 'building_plan_approval', label: 'Building Plan', icon: '📐' },
-    { code: 'occupancy_certificate', label: 'Occupancy Cert', icon: '🏗️' },
-  ],
-  healthcare: [
-    { code: 'clinical_establishment', label: 'Clinic License', icon: '🏥' },
-    { code: 'biomedical_waste', label: 'Biomedical Waste', icon: '⚕️' },
-    { code: 'drug_license', label: 'Drug License', icon: '💊' },
-    { code: 'fire_noc', label: 'Fire NOC', icon: '🔥' },
-  ],
-  professional: [
-    { code: 'gst_filing', label: 'GST Return', icon: '📊' },
-    { code: 'professional_tax', label: 'Professional Tax', icon: '👔' },
-    { code: 'trade_license', label: 'Trade License', icon: '📜' },
-    { code: 'shop_establishment', label: 'Shop License', icon: '🏪' },
-  ],
-};
-
-function getCompliancePresets(industryCode?: string) {
-  if (industryCode && INDUSTRY_COMPLIANCE_PRESETS[industryCode]) {
-    return INDUSTRY_COMPLIANCE_PRESETS[industryCode];
-  }
-  return DEFAULT_COMPLIANCE_PRESETS;
-}
-
 export default function GuidedEntryScreen() {
-  const { painPoint, workspaceName, workspaceId, industry } = useLocalSearchParams<{
+  const { painPoint, workspaceName, workspaceId, persona } = useLocalSearchParams<{
     painPoint?: string;
     workspaceName?: string;
     workspaceId?: string;
-    industry?: string;
+    persona?: string;
   }>();
 
   const { user } = useAppSelector(state => state.auth);
   const activePainPoint = (painPoint || 'insurance') as keyof typeof PAIN_POINT_CONFIG;
   const config = PAIN_POINT_CONFIG[activePainPoint];
 
-  // Get industry-specific compliance presets
-  const compliancePresets = getCompliancePresets(industry);
-  const industryConfig = industry ? getIndustryByCode(industry) : undefined;
+  // Compliance presets — loaded from persona bundle if available
+  const [compliancePresets, setCompliancePresets] = useState(FALLBACK_COMPLIANCE_PRESETS);
+  const [personaBundle, setPersonaBundle] = useState<RenewalBundle | null>(null);
+  const [presetsLoading, setPresetsLoading] = useState(activePainPoint === 'compliance' && !!persona);
 
-  // Override header for compliance users with industry context
-  const headerConfig = activePainPoint === 'compliance' && industryConfig
+  // Load persona bundle presets from DB
+  useEffect(() => {
+    if (activePainPoint !== 'compliance' || !persona) return;
+
+    const loadPersonaPresets = async () => {
+      try {
+        const [bundle, allPresets] = await Promise.all([
+          getRenewalBundleByCode(persona),
+          getRenewalPresets(),
+        ]);
+
+        if (bundle) {
+          setPersonaBundle(bundle);
+
+          // Resolve bundle's preset_codes to actual presets with icons/titles
+          const resolved = bundle.preset_codes
+            .map(code => {
+              const preset = allPresets.find(p => p.code === code);
+              if (preset) {
+                return { code: preset.code, label: preset.title, icon: preset.icon || '📋' };
+              }
+              return null;
+            })
+            .filter(Boolean) as { code: string; label: string; icon: string }[];
+
+          if (resolved.length > 0) {
+            setCompliancePresets(resolved);
+          }
+        }
+      } catch (err) {
+        console.error('[GuidedEntry] Failed to load persona presets:', err);
+      } finally {
+        setPresetsLoading(false);
+      }
+    };
+
+    loadPersonaPresets();
+  }, [persona, activePainPoint]);
+
+  // Dynamic header based on persona
+  const headerConfig = activePainPoint === 'compliance' && personaBundle
     ? {
-        icon: industryConfig.icon,
-        title: `Track your ${industryConfig.label} compliance`,
-        subtitle: `We've picked the top licenses for your business. Start with one.`,
+        icon: personaBundle.icon || config.icon,
+        title: `Track your ${personaBundle.title} compliance`,
+        subtitle: personaBundle.hook || `We've picked the top licenses for you. Start with one.`,
         successTitle: config.successTitle,
         successMessage: config.successMessage,
       }
@@ -157,8 +154,15 @@ export default function GuidedEntryScreen() {
   const [showLoanDatePicker, setShowLoanDatePicker] = useState(false);
   const [loanPurpose, setLoanPurpose] = useState('');
 
-  // Compliance fields — default to first industry-relevant preset
-  const [complianceType, setComplianceType] = useState(compliancePresets[0]?.code || 'fire_noc');
+  // Compliance fields — default updates when presets load
+  const [complianceType, setComplianceType] = useState('fire_noc');
+
+  // Update default selection when persona presets load
+  useEffect(() => {
+    if (compliancePresets.length > 0 && compliancePresets[0].code !== 'fire_noc') {
+      setComplianceType(compliancePresets[0].code);
+    }
+  }, [compliancePresets]);
   const [complianceExpiry, setComplianceExpiry] = useState(new Date());
   const [showComplianceDatePicker, setShowComplianceDatePicker] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -463,14 +467,17 @@ export default function GuidedEntryScreen() {
   // --- Render Compliance Form ---
   const renderComplianceForm = () => (
     <>
-      {industryConfig && (
-        <View style={styles.industryBadge}>
-          <Text style={styles.industryBadgeText}>
-            {industryConfig.icon} Showing compliance for {industryConfig.label}
+      {personaBundle && (
+        <View style={styles.personaBadge}>
+          <Text style={styles.personaBadgeText}>
+            {personaBundle.icon} {personaBundle.title}
           </Text>
         </View>
       )}
 
+      {presetsLoading ? (
+        <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: Spacing.md }} />
+      ) : (
       <View>
         <Text style={styles.label}>COMPLIANCE TYPE</Text>
         <View style={styles.chipRow}>
@@ -488,6 +495,7 @@ export default function GuidedEntryScreen() {
           ))}
         </View>
       </View>
+      )}
 
       <View>
         <Text style={styles.label}>EXPIRY / DUE DATE</Text>
@@ -714,7 +722,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
   },
-  industryBadge: {
+  personaBadge: {
     backgroundColor: 'rgba(99, 102, 241, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(99, 102, 241, 0.2)',
@@ -724,7 +732,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     alignSelf: 'flex-start',
   },
-  industryBadgeText: {
+  personaBadgeText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     color: Colors.primary,

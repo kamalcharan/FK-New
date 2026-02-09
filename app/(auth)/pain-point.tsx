@@ -53,7 +53,7 @@ export default function PainPointScreen() {
       // Continue navigation even if save fails
     }
 
-    // Compliance users go to industry picker first
+    // Compliance users go to persona picker first
     if (painPointId === 'compliance') {
       router.replace({
         pathname: '/(auth)/industry-picker',

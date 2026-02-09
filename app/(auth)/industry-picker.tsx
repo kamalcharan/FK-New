@@ -1,12 +1,17 @@
 // app/(auth)/industry-picker.tsx
-import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+// Persona picker — loads bundles from fk_renewal_bundles (same data as add-renewal persona step)
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
-import { updateOnboardingContext, isSupabaseReady } from '../../src/lib/supabase';
+import {
+  updateOnboardingContext,
+  isSupabaseReady,
+  getRenewalBundles,
+  RenewalBundle,
+} from '../../src/lib/supabase';
 import { useAppSelector } from '../../src/hooks/useStore';
-import { INDUSTRIES } from '../../src/constants/renewals';
 
 export default function IndustryPickerScreen() {
   const { userName, painPoint } = useLocalSearchParams<{
@@ -15,15 +20,35 @@ export default function IndustryPickerScreen() {
   }>();
   const { user } = useAppSelector(state => state.auth);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [bundles, setBundles] = useState<RenewalBundle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSelect = async (industryCode: string) => {
+  useEffect(() => {
+    loadBundles();
+  }, []);
+
+  const loadBundles = async () => {
+    try {
+      const data = await getRenewalBundles();
+      setBundles(data);
+    } catch (err) {
+      console.error('[IndustryPicker] Failed to load bundles:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelect = async (bundle: RenewalBundle) => {
     if (isNavigating) return;
     setIsNavigating(true);
 
-    // Save industry to profile metadata
+    // Save persona (bundle code) to profile metadata
     try {
       if (isSupabaseReady() && user?.id) {
-        await updateOnboardingContext(user.id, { industry: industryCode });
+        await updateOnboardingContext(user.id, {
+          persona: bundle.code,
+          persona_title: bundle.title,
+        });
       }
     } catch (err) {
       console.error('[IndustryPicker] Failed to save context:', err);
@@ -34,10 +59,20 @@ export default function IndustryPickerScreen() {
       params: {
         userName: userName || '',
         painPoint: painPoint || 'compliance',
-        industry: industryCode,
+        persona: bundle.code,
       },
     });
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -49,27 +84,30 @@ export default function IndustryPickerScreen() {
         <Text style={styles.buildingTag}>BUILDING YOUR FAMILY'S SECOND BRAIN</Text>
 
         {/* Header */}
-        <Text style={styles.title}>What's your business?</Text>
+        <Text style={styles.title}>What describes you?</Text>
         <Text style={styles.subtitle}>
           We'll show you the exact licenses and deadlines that matter.
         </Text>
 
-        {/* Industry Cards */}
+        {/* Persona Cards — from DB */}
         <View style={styles.cardsContainer}>
-          {INDUSTRIES.map((industry) => (
+          {bundles.map((bundle) => (
             <Pressable
-              key={industry.code}
+              key={bundle.id}
               style={({ pressed }) => [
                 styles.card,
                 pressed && styles.cardPressed,
               ]}
-              onPress={() => handleSelect(industry.code)}
+              onPress={() => handleSelect(bundle)}
               disabled={isNavigating}
             >
-              <Text style={styles.cardIcon}>{industry.icon}</Text>
+              <Text style={styles.cardIcon}>{bundle.icon || '📋'}</Text>
               <View style={styles.cardText}>
-                <Text style={styles.cardTitle}>{industry.label}</Text>
-                <Text style={styles.cardSubtitle}>{industry.subtitle}</Text>
+                <Text style={styles.cardTitle}>{bundle.title}</Text>
+                {bundle.hook && (
+                  <Text style={styles.cardSubtitle} numberOfLines={2}>{bundle.hook}</Text>
+                )}
+                <Text style={styles.cardCount}>{bundle.preset_codes.length} compliance items</Text>
               </View>
             </Pressable>
           ))}
@@ -83,6 +121,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -144,5 +187,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     lineHeight: 18,
+    marginBottom: 4,
+  },
+  cardCount: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: Colors.textMuted,
   },
 });

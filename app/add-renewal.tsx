@@ -39,7 +39,6 @@ import {
   formatCostRange,
   getCategoryIcon,
   CATEGORY_INFO,
-  getIndustryByCode,
 } from '../src/constants/renewals';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -140,15 +139,12 @@ export default function AddRenewalScreen() {
       }, {} as Record<string, RenewalPreset[]>);
       setPresetsByCategory(grouped);
 
-      // If user has industry context and no preset code param, auto-select their bundle
-      if (onboardingCtx?.industry && !params.presetCode && !params.showStories) {
-        const industryConfig = getIndustryByCode(onboardingCtx.industry);
-        if (industryConfig?.bundleCode) {
-          const matchingBundle = bundlesData.find(b => b.code === industryConfig.bundleCode);
-          if (matchingBundle) {
-            setSelectedBundle(matchingBundle);
-            setStep('stack');
-          }
+      // If user has persona context and no preset code param, auto-select their bundle
+      if (onboardingCtx?.persona && !params.presetCode && !params.showStories) {
+        const matchingBundle = bundlesData.find(b => b.code === onboardingCtx.persona);
+        if (matchingBundle) {
+          setSelectedBundle(matchingBundle);
+          setStep('stack');
         }
       }
     } catch (error) {

@@ -1267,7 +1267,7 @@ export const updateOnboardingContext = async (
 // Get onboarding context from profile metadata
 export const getOnboardingContext = async (
   userId: string
-): Promise<{ pain_point?: string; industry?: string } | null> => {
+): Promise<{ pain_point?: string; persona?: string; persona_title?: string } | null> => {
   if (!supabase) return null;
 
   const { data, error } = await supabase
