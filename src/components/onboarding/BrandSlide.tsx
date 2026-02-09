@@ -1,29 +1,26 @@
-// src/components/SplashScreen.tsx
+// src/components/onboarding/BrandSlide.tsx
 import { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, Image } from 'react-native';
-import { Colors } from '../constants/theme';
+import { View, Text, StyleSheet, Image, Animated } from 'react-native';
+import { Colors, Spacing } from '../../constants/theme';
+import { Button } from '../ui/Button';
 
-const { height } = Dimensions.get('window');
-
-interface SplashScreenProps {
-  onFinish: () => void;
+interface BrandSlideProps {
+  onGetStarted: () => void;
 }
 
-export function SplashScreen({ onFinish }: SplashScreenProps) {
-  const logoScale = useRef(new Animated.Value(0.8)).current;
+export function BrandSlide({ onGetStarted }: BrandSlideProps) {
   const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.85)).current;
   const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const taglineTranslate = useRef(new Animated.Value(20)).current;
-  const glowOpacity = useRef(new Animated.Value(0)).current;
+  const taglineTranslate = useRef(new Animated.Value(15)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Animate in sequence for elegant reveal
     Animated.sequence([
-      // Logo fades in and scales up
       Animated.parallel([
         Animated.timing(logoOpacity, {
           toValue: 1,
-          duration: 600,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.spring(logoScale, {
@@ -33,87 +30,73 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
           useNativeDriver: true,
         }),
       ]),
-      // Small delay
-      Animated.delay(200),
-      // Tagline slides up and fades in
+      Animated.delay(150),
       Animated.parallel([
         Animated.timing(taglineOpacity, {
           toValue: 1,
-          duration: 500,
+          duration: 400,
           useNativeDriver: true,
         }),
         Animated.timing(taglineTranslate, {
           toValue: 0,
-          duration: 500,
+          duration: 400,
           useNativeDriver: true,
         }),
       ]),
-      // Glow effect
-      Animated.timing(glowOpacity, {
+      Animated.timing(buttonOpacity, {
         toValue: 1,
-        duration: 400,
+        duration: 300,
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Auto-dismiss after 2.2 seconds
-    const timer = setTimeout(() => {
-      onFinish();
-    }, 2200);
-
-    return () => clearTimeout(timer);
   }, []);
 
   return (
     <View style={styles.container}>
-      {/* Background glow effect */}
-      <Animated.View
-        style={[
-          styles.glowBackground,
-          { opacity: glowOpacity }
-        ]}
-      />
-
-      {/* Main content - centered vertically */}
       <View style={styles.content}>
-        {/* Logo section */}
+        {/* Logo */}
         <Animated.View
           style={[
             styles.logoContainer,
             {
               opacity: logoOpacity,
               transform: [{ scale: logoScale }],
-            }
+            },
           ]}
         >
-          {/* Logo with glow */}
-          <View style={styles.logoWrapper}>
-            <View style={styles.logoGlow} />
-            <Image
-              source={require('../../assets/icon.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require('../../../assets/icon.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </Animated.View>
 
-        {/* Tagline section - directly below logo */}
+        {/* Tagline */}
         <Animated.View
           style={[
             styles.taglineContainer,
             {
               opacity: taglineOpacity,
               transform: [{ translateY: taglineTranslate }],
-            }
+            },
           ]}
         >
-          <View style={styles.taglineDivider} />
+          <View style={styles.divider} />
           <Text style={styles.tagline}>
             Your family's second brain
           </Text>
           <Text style={styles.taglineEmphasis}>
-            for things that matter
+            for the things nobody remembers{'\n'}until it's too late.
           </Text>
+        </Animated.View>
+
+        {/* CTA */}
+        <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
+          <Button
+            title="Get Started"
+            variant="white"
+            onPress={onGetStarted}
+          />
         </Animated.View>
       </View>
     </View>
@@ -127,46 +110,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  glowBackground: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: Colors.primary,
-    opacity: 0.08,
-    top: height * 0.25,
-  },
   content: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
   },
   logoContainer: {
-    alignItems: 'center',
     marginBottom: 32,
   },
-  logoWrapper: {
-    position: 'relative',
-    marginBottom: 20,
-  },
-  logoGlow: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: Colors.primary,
-    opacity: 0.15,
-    top: -20,
-    left: -20,
-  },
   logoImage: {
-    width: 160,
-    height: 160,
+    width: 140,
+    height: 140,
   },
   taglineContainer: {
     alignItems: 'center',
-    paddingHorizontal: 40,
+    marginBottom: 48,
   },
-  taglineDivider: {
+  divider: {
     width: 40,
     height: 2,
     backgroundColor: Colors.primary,
@@ -185,5 +145,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: Colors.text,
     textAlign: 'center',
+    lineHeight: 26,
+  },
+  buttonContainer: {
+    width: '100%',
   },
 });

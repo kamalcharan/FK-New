@@ -54,7 +54,7 @@ export default function SetPasswordScreen() {
     try {
       if (!isSupabaseReady()) {
         // Demo mode - skip actual signup
-        router.replace('/(auth)/workspace-setup');
+        router.replace('/(auth)/profile-setup');
         return;
       }
 
@@ -81,7 +81,7 @@ export default function SetPasswordScreen() {
         // The database trigger will auto-create fk_users and fk_user_profiles
 
         // Navigate to workspace setup
-        router.replace('/(auth)/workspace-setup');
+        router.replace('/(auth)/profile-setup');
       }
     } catch (err) {
       console.error('Sign up error:', err);

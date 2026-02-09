@@ -1,17 +1,17 @@
 // app/(auth)/workspace-setup.tsx
-import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useMemo } from 'react';
 import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui';
-import { createWorkspace, joinWorkspaceByCode, getCurrentUser, isSupabaseReady, supabase } from '../../src/lib/supabase';
+import { createWorkspace, joinWorkspaceByCode, getCurrentUser, isSupabaseReady, supabase, updateOnboardingStatus } from '../../src/lib/supabase';
 import { useAppDispatch } from '../../src/hooks/useStore';
 import { setWorkspace } from '../../src/store/slices/workspaceSlice';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../../src/components/ToastConfig';
 
 export default function WorkspaceSetupScreen() {
   const dispatch = useAppDispatch();
-  const { userName } = useLocalSearchParams<{ userName?: string }>();
+  const { userName, painPoint } = useLocalSearchParams<{ userName?: string; painPoint?: string }>();
 
   const [vaultName, setVaultName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -21,7 +21,6 @@ export default function WorkspaceSetupScreen() {
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [error, setError] = useState('');
 
-  // Create personalized placeholder based on user's name
   const placeholderText = useMemo(() => {
     if (userName) {
       const firstName = userName.split(' ')[0];
@@ -38,21 +37,26 @@ export default function WorkspaceSetupScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        // Demo mode
         dispatch(setWorkspace({
           id: 'demo-workspace',
           name: vaultName.trim(),
           owner_id: 'demo-user',
           created_at: new Date().toISOString(),
         }));
-        router.replace('/(tabs)');
+        // Go to guided entry with pain point context
+        router.replace({
+          pathname: '/(auth)/guided-entry',
+          params: {
+            painPoint: painPoint || 'insurance',
+            workspaceName: vaultName.trim(),
+            workspaceId: 'demo-workspace',
+          },
+        });
         return;
       }
 
-      // Try to get current user, with retry for session establishment
       let user = await getCurrentUser();
 
-      // If no user, wait a moment and retry (session might still be establishing)
       if (!user && supabase) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         const { data: { session } } = await supabase.auth.getSession();
@@ -67,7 +71,6 @@ export default function WorkspaceSetupScreen() {
 
       const workspace = await createWorkspace(vaultName.trim(), user.id);
 
-      // Update Redux store
       dispatch(setWorkspace({
         id: workspace.id,
         name: workspace.name,
@@ -75,11 +78,11 @@ export default function WorkspaceSetupScreen() {
         created_at: workspace.created_at,
       }));
 
-      // Show success and navigate to family invite screen
-      showSuccessToast('Vault Created', `Now invite your family!`);
+      // Navigate to guided entry instead of family invite
       router.replace({
-        pathname: '/(auth)/family-invite',
+        pathname: '/(auth)/guided-entry',
         params: {
+          painPoint: painPoint || 'insurance',
           workspaceName: workspace.name,
           workspaceId: workspace.id,
         },
@@ -99,7 +102,6 @@ export default function WorkspaceSetupScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        // Demo mode
         dispatch(setWorkspace({
           id: 'demo-workspace',
           name: 'Joined Workspace',
@@ -110,7 +112,6 @@ export default function WorkspaceSetupScreen() {
         return;
       }
 
-      // Try to get current user, with retry for session establishment
       let user = await getCurrentUser();
 
       if (!user && supabase) {
@@ -127,7 +128,6 @@ export default function WorkspaceSetupScreen() {
 
       const workspace = await joinWorkspaceByCode(inviteCode.trim(), user.id);
 
-      // Update Redux store
       dispatch(setWorkspace({
         id: workspace.id,
         name: workspace.name,
@@ -135,11 +135,8 @@ export default function WorkspaceSetupScreen() {
         created_at: '',
       }));
 
-      // Mark onboarding as complete for joining users
-      const { updateOnboardingStatus } = await import('../../src/lib/supabase');
       await updateOnboardingStatus(user.id, true);
 
-      // Show success and navigate directly to main app (no invite needed when joining)
       showSuccessToast('Joined Vault', `Welcome to ${workspace.name}!`);
       router.replace('/(tabs)');
     } catch (err: any) {
@@ -151,8 +148,13 @@ export default function WorkspaceSetupScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Persistent Tag */}
+      <Text style={styles.buildingTag}>BUILDING YOUR FAMILY'S SECOND BRAIN</Text>
+
       <View>
-        <Text style={styles.title}>{showJoinForm ? 'Join a Vault' : 'Build Your Vault'}</Text>
+        <Text style={styles.title}>
+          {showJoinForm ? 'Join a Vault' : 'Name your family\'s brain space'}
+        </Text>
         <Text style={styles.subtitle}>
           {showJoinForm
             ? 'Enter the invite code shared with you'
@@ -165,14 +167,10 @@ export default function WorkspaceSetupScreen() {
       <View style={styles.form}>
         {showJoinForm ? (
           <>
-            {/* Invite Code Input */}
             <View>
               <Text style={styles.label}>INVITE CODE</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  isCodeFocused ? styles.inputFocused : null,
-                ]}
+                style={[styles.input, isCodeFocused ? styles.inputFocused : null]}
                 placeholder="Enter invite code"
                 placeholderTextColor={Colors.textPlaceholder}
                 value={inviteCode}
@@ -187,7 +185,6 @@ export default function WorkspaceSetupScreen() {
               />
             </View>
 
-            {/* Join Button */}
             <Button
               title={isLoading ? 'Joining...' : 'Join Vault'}
               variant="primary"
@@ -196,7 +193,6 @@ export default function WorkspaceSetupScreen() {
               loading={isLoading}
             />
 
-            {/* Back to Create */}
             <Button
               title="Create New Vault Instead"
               variant="secondary"
@@ -208,14 +204,10 @@ export default function WorkspaceSetupScreen() {
           </>
         ) : (
           <>
-            {/* Vault Name Input */}
             <View>
               <Text style={styles.label}>VAULT NAME</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  isFocused ? styles.inputFocused : null,
-                ]}
+                style={[styles.input, isFocused ? styles.inputFocused : null]}
                 placeholder={placeholderText}
                 placeholderTextColor={Colors.textPlaceholder}
                 value={vaultName}
@@ -230,7 +222,6 @@ export default function WorkspaceSetupScreen() {
               />
             </View>
 
-            {/* Create Button */}
             <Button
               title={isLoading ? 'Creating...' : 'Create Vault'}
               variant="primary"
@@ -239,22 +230,7 @@ export default function WorkspaceSetupScreen() {
               loading={isLoading}
             />
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Join Button */}
-            <Button
-              title="Join Existing Vault"
-              variant="secondary"
-              onPress={() => {
-                setShowJoinForm(true);
-                setError('');
-              }}
-            />
+{/* Join Existing Vault hidden - invite code flow handles this via verify-invite screen */}
           </>
         )}
       </View>
@@ -269,9 +245,16 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     justifyContent: 'center',
   },
+  buildingTag: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.primary,
+    letterSpacing: 2,
+    marginBottom: Spacing.xl,
+  },
   title: {
     fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 32,
+    fontSize: 28,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },

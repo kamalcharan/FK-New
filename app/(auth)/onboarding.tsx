@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react';
 import { View, StyleSheet, Dimensions, FlatList, ViewToken } from 'react-native';
 import { router } from 'expo-router';
-import { EmergencySlide, FeatureSlide } from '../../src/components/onboarding';
+import { EmergencySlide, StorySlide, BrandSlide } from '../../src/components/onboarding';
 import { ONBOARDING_SLIDES } from '../../src/constants/onboarding';
 import { Colors } from '../../src/constants/theme';
 
@@ -19,14 +19,12 @@ export default function OnboardingScreen() {
         animated: true,
       });
     } else {
-      // Last slide - go to sign in
       router.push('/(auth)/sign-in');
     }
   };
 
-  const handleEmergencyContinue = () => {
-    // Go to next slide (not skip to sign-in)
-    handleNext();
+  const handleGetStarted = () => {
+    router.push('/(auth)/sign-in');
   };
 
   const onViewableItemsChanged = useRef(
@@ -45,24 +43,35 @@ export default function OnboardingScreen() {
     if (item.type === 'emergency') {
       return (
         <View style={styles.slide}>
-          <EmergencySlide onContinue={handleEmergencyContinue} />
+          <EmergencySlide onContinue={handleNext} />
         </View>
       );
     }
 
-    return (
-      <View style={styles.slide}>
-        <FeatureSlide
-          icon={item.icon || '📄'}
-          title={item.title}
-          subtitle={item.subtitle}
-          currentIndex={index}
-          totalSlides={ONBOARDING_SLIDES.length}
-          onNext={handleNext}
-          isLast={index === ONBOARDING_SLIDES.length - 1}
-        />
-      </View>
-    );
+    if (item.type === 'story') {
+      return (
+        <View style={styles.slide}>
+          <StorySlide
+            badge={item.badge || ''}
+            badgeColor={item.badgeColor || Colors.textMuted}
+            title={item.title}
+            subtitle={item.subtitle}
+            buttonText={item.buttonText || 'Next'}
+            onNext={handleNext}
+          />
+        </View>
+      );
+    }
+
+    if (item.type === 'brand') {
+      return (
+        <View style={styles.slide}>
+          <BrandSlide onGetStarted={handleGetStarted} />
+        </View>
+      );
+    }
+
+    return null;
   };
 
   return (

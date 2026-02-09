@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronDown, User, Phone } from 'lucide-react-native';
-import { Colors, Typography, BorderRadius } from '../../src/constants/theme';
+import { ChevronDown } from 'lucide-react-native';
+import { Colors, Typography, BorderRadius, Spacing } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { countryCodeOptions, getDefaultCountryCode, CountryCode } from '../../src/constants/countryCodes';
 import { updateUserProfile, isSupabaseReady } from '../../src/lib/supabase';
@@ -34,6 +34,7 @@ export default function ProfileSetupScreen() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const firstName = (userName || user?.full_name || '').split(' ')[0] || 'there';
   const isPhoneValid = phone.length >= 10;
   const isNameValid = fullName.trim().length >= 2;
   const isFormValid = isNameValid && isPhoneValid;
@@ -54,28 +55,23 @@ export default function ProfileSetupScreen() {
     setIsLoading(true);
     try {
       if (isSupabaseReady() && user?.id) {
-        // Format phone with country code
         const fullPhone = `${selectedCountry.dial}${phone.replace(/\D/g, '')}`;
 
-        // Update user profile in database
         await updateUserProfile(user.id, {
           full_name: fullName.trim(),
           phone: fullPhone,
           country_code: selectedCountry.code,
         });
 
-        // Update Redux state
         dispatch(setUser({
           ...user,
           full_name: fullName.trim(),
         }));
-
-        showSuccessToast('Profile Saved', 'Your profile has been updated');
       }
 
-      // Navigate to workspace setup
+      // Navigate to pain point picker
       router.replace({
-        pathname: '/(auth)/workspace-setup',
+        pathname: '/(auth)/pain-point',
         params: { userName: fullName.trim() },
       });
     } catch (err: any) {
@@ -85,7 +81,6 @@ export default function ProfileSetupScreen() {
       setIsLoading(false);
     }
   };
-
 
   const renderCountryItem = ({ item }: { item: CountryCode }) => (
     <Pressable
@@ -111,22 +106,27 @@ export default function ProfileSetupScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
+          {/* Persistent Tag */}
+          <Text style={styles.buildingTag}>BUILDING YOUR FAMILY'S SECOND BRAIN</Text>
+
+          {/* Welcome Header */}
           <View style={styles.header}>
-            <View style={styles.iconWrapper}>
-              <User size={32} color={Colors.primary} />
-            </View>
-            <Text style={styles.title}>Complete your profile</Text>
+            <Text style={styles.title}>Welcome, {firstName}</Text>
             <Text style={styles.subtitle}>
-              This helps family members recognize you and enables loan verifications
+              You're one step away from building your family's second brain.
             </Text>
           </View>
 
+          {/* Phone Explanation */}
+          <Text style={styles.explanation}>
+            Before we leap ahead to awesomeness — we need your contact number. This is required to initiate messages within your circle.
+          </Text>
+
           {/* Form */}
           <View style={styles.form}>
-            {/* Full Name */}
+            {/* Full Name - pre-filled, editable */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>FULL NAME <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>YOUR NAME</Text>
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}
@@ -143,9 +143,8 @@ export default function ProfileSetupScreen() {
 
             {/* Mobile Number */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>MOBILE NUMBER <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>MOBILE NUMBER</Text>
               <View style={styles.phoneContainer}>
-                {/* Country Code Selector */}
                 <Pressable
                   style={styles.countrySelector}
                   onPress={() => setShowCountryPicker(true)}
@@ -155,7 +154,6 @@ export default function ProfileSetupScreen() {
                   <ChevronDown size={16} color={Colors.textMuted} />
                 </Pressable>
 
-                {/* Phone Input */}
                 <TextInput
                   value={phone}
                   onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
@@ -170,7 +168,7 @@ export default function ProfileSetupScreen() {
                 <Text style={styles.errorText}>Please enter a valid 10-digit mobile number</Text>
               ) : (
                 <Text style={styles.helperText}>
-                  Required for loan verifications via WhatsApp
+                  Used for loan verifications and family notifications
                 </Text>
               )}
             </View>
@@ -187,8 +185,7 @@ export default function ProfileSetupScreen() {
 
           {/* Privacy Note */}
           <Text style={styles.privacyNote}>
-            Your phone number is only shared with family members you invite.{'\n'}
-            It's used for loan verifications via WhatsApp.
+            Your number is only visible to family members you invite.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -230,32 +227,35 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 32,
     paddingBottom: 24,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
+  buildingTag: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.primary,
+    letterSpacing: 2,
+    marginBottom: Spacing.xl,
   },
-  iconWrapper: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
+  header: {
+    marginBottom: Spacing.lg,
   },
   title: {
-    ...Typography.h1,
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 30,
     color: Colors.text,
     marginBottom: 8,
-    textAlign: 'center',
   },
   subtitle: {
     ...Typography.body,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    lineHeight: 24,
+  },
+  explanation: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    lineHeight: 24,
+    marginBottom: Spacing.xl,
   },
   form: {
     marginBottom: 32,
@@ -269,9 +269,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
     letterSpacing: 1.5,
-  },
-  required: {
-    color: Colors.danger,
   },
   input: {
     backgroundColor: Colors.inputBackground,
@@ -338,7 +335,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: Colors.background,
