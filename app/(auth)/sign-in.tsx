@@ -85,9 +85,12 @@ export default function SignInScreen() {
 
         // Determine where to navigate
         if (!workspace) {
-          // No workspace - go to workspace setup
+          // No workspace - go to profile setup (welcome + phone)
           showSuccessToast('Welcome Back', 'Let\'s set up your vault');
-          router.replace('/(auth)/workspace-setup');
+          router.replace({
+            pathname: '/(auth)/profile-setup',
+            params: { userName: user.user_metadata?.full_name || '' },
+          });
         } else if (!profile?.onboarding_completed) {
           // Has workspace but onboarding not complete - go to family invite
           dispatch(setWorkspace(workspace));

@@ -90,9 +90,9 @@ export default function SignUpScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        // Demo mode - skip actual signup, pass name for personalization
+        // Demo mode - go to welcome + phone setup
         router.replace({
-          pathname: '/(auth)/workspace-setup',
+          pathname: '/(auth)/profile-setup',
           params: { userName: fullName },
         });
         return;
@@ -104,9 +104,8 @@ export default function SignUpScreen() {
       if (!signUpResult.session) {
         // No session - email confirmation might be required
         showSuccessToast('Check Your Email', 'Please verify your email to continue');
-        // Still go to workspace-setup, it will handle the auth check
         router.replace({
-          pathname: '/(auth)/workspace-setup',
+          pathname: '/(auth)/profile-setup',
           params: { userName: fullName },
         });
         return;
@@ -155,9 +154,8 @@ export default function SignUpScreen() {
       }
 
       showSuccessToast('Account Created', 'Welcome to FamilyKnows!');
-      // Pass the user's name for personalized placeholder
       router.replace({
-        pathname: '/(auth)/workspace-setup',
+        pathname: '/(auth)/profile-setup',
         params: { userName: fullName },
       });
     } catch (err: any) {
