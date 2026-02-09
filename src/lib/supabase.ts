@@ -1201,7 +1201,7 @@ export const getUserProfile = async (userId: string) => {
   return data;
 };
 
-// Update user profile
+// Update user profile (upserts if profile doesn't exist yet)
 export const updateUserProfile = async (
   userId: string,
   updates: {
@@ -1215,8 +1215,10 @@ export const updateUserProfile = async (
 
   const { data, error } = await supabase
     .from('fk_user_profiles')
-    .update(updates)
-    .eq('user_id', userId)
+    .upsert(
+      { user_id: userId, ...updates },
+      { onConflict: 'user_id' }
+    )
     .select()
     .single();
 
@@ -1251,8 +1253,10 @@ export const updateOnboardingContext = async (
 
   const { data, error } = await supabase
     .from('fk_user_profiles')
-    .update({ metadata: updatedMetadata })
-    .eq('user_id', userId)
+    .upsert(
+      { user_id: userId, metadata: updatedMetadata },
+      { onConflict: 'user_id' }
+    )
     .select()
     .single();
 
