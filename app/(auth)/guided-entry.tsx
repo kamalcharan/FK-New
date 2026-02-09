@@ -129,6 +129,17 @@ export default function GuidedEntryScreen() {
   const compliancePresets = getCompliancePresets(industry);
   const industryConfig = industry ? getIndustryByCode(industry) : undefined;
 
+  // Override header for compliance users with industry context
+  const headerConfig = activePainPoint === 'compliance' && industryConfig
+    ? {
+        icon: industryConfig.icon,
+        title: `Track your ${industryConfig.label} compliance`,
+        subtitle: `We've picked the top licenses for your business. Start with one.`,
+        successTitle: config.successTitle,
+        successMessage: config.successMessage,
+      }
+    : config;
+
   const [isLoading, setIsLoading] = useState(false);
 
   // Insurance fields
@@ -174,7 +185,7 @@ export default function GuidedEntryScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        showSuccessToast(config.successTitle, config.successMessage);
+        showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
         navigateToInvite();
         return;
       }
@@ -197,7 +208,7 @@ export default function GuidedEntryScreen() {
         []
       );
 
-      showSuccessToast(config.successTitle, config.successMessage);
+      showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
       navigateToInvite();
     } catch (err: any) {
       showErrorToast('Save Failed', err.message || 'Please try again');
@@ -213,7 +224,7 @@ export default function GuidedEntryScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        showSuccessToast(config.successTitle, config.successMessage);
+        showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
         navigateToInvite();
         return;
       }
@@ -235,7 +246,7 @@ export default function GuidedEntryScreen() {
         is_historical: true,
       });
 
-      showSuccessToast(config.successTitle, config.successMessage);
+      showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
       navigateToInvite();
     } catch (err: any) {
       showErrorToast('Save Failed', err.message || 'Please try again');
@@ -250,7 +261,7 @@ export default function GuidedEntryScreen() {
 
     try {
       if (!isSupabaseReady()) {
-        showSuccessToast(config.successTitle, config.successMessage);
+        showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
         navigateToInvite();
         return;
       }
@@ -272,7 +283,7 @@ export default function GuidedEntryScreen() {
         reference_number: referenceNumber.trim() || undefined,
       });
 
-      showSuccessToast(config.successTitle, config.successMessage);
+      showSuccessToast(headerConfig.successTitle, headerConfig.successMessage);
       navigateToInvite();
     } catch (err: any) {
       showErrorToast('Save Failed', err.message || 'Please try again');
@@ -534,9 +545,9 @@ export default function GuidedEntryScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.icon}>{config.icon}</Text>
-          <Text style={styles.title}>{config.title}</Text>
-          <Text style={styles.subtitle}>{config.subtitle}</Text>
+          <Text style={styles.icon}>{headerConfig.icon}</Text>
+          <Text style={styles.title}>{headerConfig.title}</Text>
+          <Text style={styles.subtitle}>{headerConfig.subtitle}</Text>
         </View>
 
         {/* Form */}
