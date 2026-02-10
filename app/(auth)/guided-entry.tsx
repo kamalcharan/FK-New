@@ -701,6 +701,9 @@ export default function GuidedEntryScreen() {
         {/* Building Tag */}
         <Text style={styles.buildingTag}>BUILDING YOUR FAMILY'S SECOND BRAIN</Text>
 
+        {/* Debug: remove after confirming new code loads */}
+        <Text style={{ color: '#f59e0b', fontSize: 10, marginBottom: 4 }}>v7-inline-persona | pain={painPoint} | phase={activePainPoint === 'compliance' ? compliancePhase : 'n/a'}</Text>
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.icon}>{headerConfig.icon}</Text>
