@@ -53,24 +53,15 @@ export default function PainPointScreen() {
       // Continue navigation even if save fails
     }
 
-    // Compliance users go to persona picker first
-    if (painPointId === 'compliance') {
-      router.replace({
-        pathname: '/(auth)/industry-picker',
-        params: {
-          userName: userName || '',
-          painPoint: painPointId,
-        },
-      });
-    } else {
-      router.replace({
-        pathname: '/(auth)/workspace-setup',
-        params: {
-          userName: userName || '',
-          painPoint: painPointId,
-        },
-      });
-    }
+    // All pain points go directly to workspace-setup
+    // Compliance persona selection happens inside guided-entry itself
+    router.replace({
+      pathname: '/(auth)/workspace-setup',
+      params: {
+        userName: userName || '',
+        painPoint: painPointId,
+      },
+    });
   };
 
   return (

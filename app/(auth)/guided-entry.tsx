@@ -22,9 +22,11 @@ import {
   createRenewal,
   isSupabaseReady,
   getCurrentUser,
+  getRenewalBundles,
   getRenewalBundleByCode,
   getRenewalPresets,
   getOnboardingContext,
+  updateOnboardingContext,
   RenewalPreset,
   RenewalBundle,
 } from '../../src/lib/supabase';
@@ -49,8 +51,8 @@ const PAIN_POINT_CONFIG = {
   },
   compliance: {
     icon: '📋',
-    title: 'Track your first compliance',
-    subtitle: 'Pick the one that keeps you up at night. We\'ll watch it for you.',
+    title: 'What describes you best?',
+    subtitle: 'We\'ll show you the exact licenses and deadlines that matter.',
     successTitle: 'Compliance Tracked!',
     successMessage: 'You\'ll never miss this deadline again.',
   },
@@ -74,6 +76,9 @@ type ResolvedPreset = {
   penalty_info?: string | null;
 };
 
+// Compliance has two phases: pick persona, then pick compliance item
+type CompliancePhase = 'persona' | 'items';
+
 export default function GuidedEntryScreen() {
   const { painPoint, workspaceName, workspaceId, persona } = useLocalSearchParams<{
     painPoint?: string;
@@ -86,82 +91,124 @@ export default function GuidedEntryScreen() {
   const activePainPoint = (painPoint || 'insurance') as keyof typeof PAIN_POINT_CONFIG;
   const config = PAIN_POINT_CONFIG[activePainPoint];
 
-  // Compliance state — loaded from persona bundle
+  // Compliance: two-phase flow (persona picker → compliance items)
+  const [compliancePhase, setCompliancePhase] = useState<CompliancePhase>('persona');
+  const [allBundles, setAllBundles] = useState<RenewalBundle[]>([]);
+  const [bundlesLoading, setBundlesLoading] = useState(activePainPoint === 'compliance');
   const [compliancePresets, setCompliancePresets] = useState<ResolvedPreset[]>([]);
   const [personaBundle, setPersonaBundle] = useState<RenewalBundle | null>(null);
-  const [presetsLoading, setPresetsLoading] = useState(activePainPoint === 'compliance');
+  const [presetsLoading, setPresetsLoading] = useState(false);
 
-  // Load persona bundle presets from DB
-  // Tries param first, then falls back to reading persona from metadata
+  // On mount: load bundles for persona picker, and check if persona already exists
   useEffect(() => {
     if (activePainPoint !== 'compliance') return;
 
-    const loadPersonaPresets = async () => {
+    const init = async () => {
       try {
-        let personaCode = persona;
+        // Load all bundles for persona picker
+        const bundles = await getRenewalBundles();
+        setAllBundles(bundles);
 
-        // Fallback: read persona from metadata if param is empty
+        // Check if persona already known (from param or metadata)
+        let personaCode = persona || '';
         if (!personaCode && user?.id) {
           const ctx = await getOnboardingContext(user.id);
           personaCode = ctx?.persona || '';
         }
 
-        if (!personaCode) {
-          setPresetsLoading(false);
-          return;
-        }
-
-        const [bundle, allPresets] = await Promise.all([
-          getRenewalBundleByCode(personaCode),
-          getRenewalPresets(),
-        ]);
-
-        if (bundle) {
-          setPersonaBundle(bundle);
-
-          // Resolve bundle's preset_codes to full preset info
-          const resolved = bundle.preset_codes
-            .map(code => {
-              const preset = allPresets.find(p => p.code === code);
-              if (preset) {
-                return {
-                  code: preset.code,
-                  title: preset.title,
-                  icon: preset.icon || '📋',
-                  frequency_months: preset.frequency_months,
-                  cost_range_min: preset.cost_range_min,
-                  cost_range_max: preset.cost_range_max,
-                  penalty_info: preset.penalty_info,
-                };
-              }
-              return null;
-            })
-            .filter(Boolean) as ResolvedPreset[];
-
-          if (resolved.length > 0) {
-            setCompliancePresets(resolved);
+        if (personaCode) {
+          // Persona already known — skip to items phase
+          const bundle = bundles.find(b => b.code === personaCode) || null;
+          if (bundle) {
+            setPersonaBundle(bundle);
+            setCompliancePhase('items');
+            await loadPresetsForBundle(bundle);
           }
         }
       } catch (err) {
-        console.error('[GuidedEntry] Failed to load persona presets:', err);
+        console.error('[GuidedEntry] Init error:', err);
       } finally {
-        setPresetsLoading(false);
+        setBundlesLoading(false);
       }
     };
 
-    loadPersonaPresets();
-  }, [persona, activePainPoint, user?.id]);
+    init();
+  }, [activePainPoint]);
 
-  // Dynamic header based on persona
-  const headerConfig = activePainPoint === 'compliance' && personaBundle
-    ? {
+  // Load presets for a selected bundle
+  const loadPresetsForBundle = async (bundle: RenewalBundle) => {
+    setPresetsLoading(true);
+    try {
+      const allPresets = await getRenewalPresets();
+      const resolved = bundle.preset_codes
+        .map(code => {
+          const preset = allPresets.find(p => p.code === code);
+          if (preset) {
+            return {
+              code: preset.code,
+              title: preset.title,
+              icon: preset.icon || '📋',
+              frequency_months: preset.frequency_months,
+              cost_range_min: preset.cost_range_min,
+              cost_range_max: preset.cost_range_max,
+              penalty_info: preset.penalty_info,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean) as ResolvedPreset[];
+
+      setCompliancePresets(resolved);
+    } catch (err) {
+      console.error('[GuidedEntry] Failed to load presets:', err);
+    } finally {
+      setPresetsLoading(false);
+    }
+  };
+
+  // Handle persona selection (inline)
+  const handlePersonaSelect = async (bundle: RenewalBundle) => {
+    setPersonaBundle(bundle);
+    setCompliancePhase('items');
+
+    // Save persona to metadata
+    try {
+      if (isSupabaseReady() && user?.id) {
+        await updateOnboardingContext(user.id, {
+          persona: bundle.code,
+          persona_title: bundle.title,
+        });
+      }
+    } catch (err) {
+      console.error('[GuidedEntry] Failed to save persona:', err);
+    }
+
+    await loadPresetsForBundle(bundle);
+  };
+
+  // Dynamic header based on phase and persona
+  const getHeaderConfig = () => {
+    if (activePainPoint !== 'compliance') return config;
+
+    if (compliancePhase === 'persona') {
+      return config; // "What describes you best?"
+    }
+
+    // Items phase — personalized header
+    if (personaBundle) {
+      return {
         icon: personaBundle.icon || config.icon,
         title: `Track your ${personaBundle.title} compliance`,
-        subtitle: personaBundle.hook || `We've picked the top licenses for you. Start with one.`,
+        subtitle: personaBundle.hook || 'Pick the one that keeps you up at night. We\'ll watch it for you.',
         successTitle: config.successTitle,
         successMessage: config.successMessage,
-      }
-    : config;
+      };
+    }
+
+    return config;
+  };
+
+  const headerConfig = getHeaderConfig();
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -484,108 +531,151 @@ export default function GuidedEntryScreen() {
     </>
   );
 
-  // --- Render Compliance Form ---
-  const renderComplianceForm = () => (
+  // --- Render Compliance: Phase 1 — Persona Picker (inline) ---
+  const renderPersonaPicker = () => (
+    <>
+      {bundlesLoading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: Spacing.xl }} />
+      ) : (
+        <View style={styles.personaGrid}>
+          {allBundles.map((bundle) => (
+            <Pressable
+              key={bundle.id}
+              style={({ pressed }) => [
+                styles.personaCard,
+                pressed && styles.personaCardPressed,
+              ]}
+              onPress={() => handlePersonaSelect(bundle)}
+            >
+              <Text style={styles.personaCardIcon}>{bundle.icon || '📋'}</Text>
+              <Text style={styles.personaCardTitle}>{bundle.title}</Text>
+              <Text style={styles.personaCardCount}>
+                {bundle.preset_codes.length} items
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </>
+  );
+
+  // --- Render Compliance: Phase 2 — Compliance Items List ---
+  const renderComplianceItems = () => (
     <>
       {presetsLoading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: Spacing.xl }} />
       ) : compliancePresets.length > 0 ? (
-        <>
-          {/* Compliance items list — pick one to track */}
-          <View>
-            <Text style={styles.label}>
-              TAP ONE TO START TRACKING
-            </Text>
-            <View style={styles.complianceList}>
-              {compliancePresets.map((preset) => {
-                const isSelected = selectedPresetCode === preset.code;
-                return (
-                  <View key={preset.code}>
-                    <Pressable
-                      style={[styles.complianceCard, isSelected && styles.complianceCardSelected]}
-                      onPress={() => setSelectedPresetCode(isSelected ? null : preset.code)}
-                    >
-                      <View style={styles.complianceCardLeft}>
-                        <Text style={styles.complianceCardIcon}>{preset.icon}</Text>
-                        <View style={styles.complianceCardInfo}>
-                          <Text style={[styles.complianceCardTitle, isSelected && styles.complianceCardTitleSelected]}>
-                            {preset.title}
-                          </Text>
-                          <View style={styles.complianceCardMeta}>
-                            {preset.frequency_months && (
-                              <Text style={styles.complianceCardFreq}>
-                                {preset.frequency_months >= 12
-                                  ? `Every ${preset.frequency_months / 12}yr`
-                                  : `Every ${preset.frequency_months}mo`}
-                              </Text>
-                            )}
-                            {preset.cost_range_min != null && preset.cost_range_max != null && (
-                              <Text style={styles.complianceCardCost}>
-                                {formatCostRange(preset.cost_range_min, preset.cost_range_max)}
-                              </Text>
-                            )}
-                          </View>
-                          {preset.penalty_info && (
-                            <Text style={styles.complianceCardPenalty} numberOfLines={1}>
-                              {preset.penalty_info}
+        <View>
+          <Text style={styles.label}>TAP ONE TO START TRACKING</Text>
+          <View style={styles.complianceList}>
+            {compliancePresets.map((preset) => {
+              const isSelected = selectedPresetCode === preset.code;
+              return (
+                <View key={preset.code}>
+                  <Pressable
+                    style={[styles.complianceCard, isSelected && styles.complianceCardSelected]}
+                    onPress={() => setSelectedPresetCode(isSelected ? null : preset.code)}
+                  >
+                    <View style={styles.complianceCardLeft}>
+                      <Text style={styles.complianceCardIcon}>{preset.icon}</Text>
+                      <View style={styles.complianceCardInfo}>
+                        <Text style={[styles.complianceCardTitle, isSelected && styles.complianceCardTitleSelected]}>
+                          {preset.title}
+                        </Text>
+                        <View style={styles.complianceCardMeta}>
+                          {preset.frequency_months && (
+                            <Text style={styles.complianceCardFreq}>
+                              {preset.frequency_months >= 12
+                                ? `Every ${preset.frequency_months / 12}yr`
+                                : `Every ${preset.frequency_months}mo`}
+                            </Text>
+                          )}
+                          {preset.cost_range_min != null && preset.cost_range_max != null && (
+                            <Text style={styles.complianceCardCost}>
+                              {formatCostRange(preset.cost_range_min, preset.cost_range_max)}
                             </Text>
                           )}
                         </View>
-                      </View>
-                      <View style={[styles.complianceRadio, isSelected && styles.complianceRadioSelected]}>
-                        {isSelected && <View style={styles.complianceRadioDot} />}
-                      </View>
-                    </Pressable>
-
-                    {/* Inline expiry date when selected */}
-                    {isSelected && (
-                      <View style={styles.inlineDateSection}>
-                        <Text style={styles.inlineDateLabel}>EXPIRY / DUE DATE</Text>
-                        <Pressable style={styles.dateButton} onPress={() => setShowComplianceDatePicker(true)}>
-                          <Text style={styles.dateText}>{formatDate(complianceExpiry)}</Text>
-                        </Pressable>
-                        {showComplianceDatePicker && (
-                          <DateTimePicker
-                            value={complianceExpiry}
-                            mode="date"
-                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                            onChange={(_, selectedDate) => {
-                              setShowComplianceDatePicker(Platform.OS === 'ios');
-                              if (selectedDate) setComplianceExpiry(selectedDate);
-                            }}
-                            themeVariant="dark"
-                          />
+                        {preset.penalty_info && (
+                          <Text style={styles.complianceCardPenalty} numberOfLines={1}>
+                            {preset.penalty_info}
+                          </Text>
                         )}
-
-                        <Text style={[styles.inlineDateLabel, { marginTop: Spacing.md }]}>
-                          REFERENCE NUMBER (OPTIONAL)
-                        </Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="License or certificate number"
-                          placeholderTextColor={Colors.textPlaceholder}
-                          value={referenceNumber}
-                          onChangeText={setReferenceNumber}
-                          autoCapitalize="characters"
-                        />
                       </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+                    </View>
+                    <View style={[styles.complianceRadio, isSelected && styles.complianceRadioSelected]}>
+                      {isSelected && <View style={styles.complianceRadioDot} />}
+                    </View>
+                  </Pressable>
+
+                  {/* Inline expiry date when selected */}
+                  {isSelected && (
+                    <View style={styles.inlineDateSection}>
+                      <Text style={styles.inlineDateLabel}>EXPIRY / DUE DATE</Text>
+                      <Pressable style={styles.dateButton} onPress={() => setShowComplianceDatePicker(true)}>
+                        <Text style={styles.dateText}>{formatDate(complianceExpiry)}</Text>
+                      </Pressable>
+                      {showComplianceDatePicker && (
+                        <DateTimePicker
+                          value={complianceExpiry}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(_, selectedDate) => {
+                            setShowComplianceDatePicker(Platform.OS === 'ios');
+                            if (selectedDate) setComplianceExpiry(selectedDate);
+                          }}
+                          themeVariant="dark"
+                        />
+                      )}
+
+                      <Text style={[styles.inlineDateLabel, { marginTop: Spacing.md }]}>
+                        REFERENCE NUMBER (OPTIONAL)
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="License or certificate number"
+                        placeholderTextColor={Colors.textPlaceholder}
+                        value={referenceNumber}
+                        onChangeText={setReferenceNumber}
+                        autoCapitalize="characters"
+                      />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
-        </>
+
+          {/* Change persona link */}
+          <Pressable
+            style={styles.changePersonaButton}
+            onPress={() => {
+              setCompliancePhase('persona');
+              setPersonaBundle(null);
+              setCompliancePresets([]);
+              setSelectedPresetCode(null);
+            }}
+          >
+            <Text style={styles.changePersonaText}>Not you? Pick a different profile</Text>
+          </Pressable>
+        </View>
       ) : (
-        /* No persona — generic fallback */
         <View style={styles.noPersonaHint}>
           <Text style={styles.noPersonaText}>
-            We couldn't load your compliance items. You can add them after setup.
+            No compliance items found for this profile.
           </Text>
         </View>
       )}
     </>
   );
+
+  // --- Render Compliance Form (both phases) ---
+  const renderComplianceForm = () => {
+    if (compliancePhase === 'persona') {
+      return renderPersonaPicker();
+    }
+    return renderComplianceItems();
+  };
 
   const renderForm = () => {
     switch (activePainPoint) {
@@ -594,6 +684,9 @@ export default function GuidedEntryScreen() {
       case 'compliance': return renderComplianceForm();
     }
   };
+
+  // Hide save button during persona picker phase
+  const showSaveButton = activePainPoint !== 'compliance' || compliancePhase === 'items';
 
   return (
     <KeyboardAvoidingView
@@ -620,14 +713,16 @@ export default function GuidedEntryScreen() {
           {renderForm()}
         </View>
 
-        {/* Save Button */}
-        <Button
-          title={isLoading ? 'Saving...' : 'Save & Continue'}
-          variant="primary"
-          onPress={handleSave}
-          disabled={isSaveDisabled() || isLoading}
-          loading={isLoading}
-        />
+        {/* Save Button — hidden during persona picker */}
+        {showSaveButton && (
+          <Button
+            title={isLoading ? 'Saving...' : 'Save & Continue'}
+            variant="primary"
+            onPress={handleSave}
+            disabled={isSaveDisabled() || isLoading}
+            loading={isLoading}
+          />
+        )}
 
         {/* Skip */}
         <Pressable onPress={navigateToInvite} style={styles.skipButton}>
@@ -779,6 +874,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
   },
+
+  // Persona picker grid (inline in guided-entry)
+  personaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  personaCard: {
+    width: '47%',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  personaCardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  personaCardIcon: {
+    fontSize: 28,
+  },
+  personaCardTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  personaCardCount: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+
   // Compliance list styles
   complianceList: {
     gap: Spacing.sm,
@@ -877,6 +1008,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     marginLeft: 4,
     textTransform: 'uppercase',
+  },
+  changePersonaButton: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  changePersonaText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: Colors.primary,
   },
   noPersonaHint: {
     padding: Spacing.lg,
