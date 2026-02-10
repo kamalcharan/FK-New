@@ -13,7 +13,16 @@ export default function AuthLayout() {
     >
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="sign-in" />
+      <Stack.Screen name="sign-up" />
+      <Stack.Screen name="set-password" />
+      <Stack.Screen name="verify-phone" />
+      <Stack.Screen name="verify-invite" />
+      <Stack.Screen name="profile-setup" />
+      <Stack.Screen name="pain-point" />
+      <Stack.Screen name="industry-picker" />
       <Stack.Screen name="workspace-setup" />
+      <Stack.Screen name="guided-entry" />
+      <Stack.Screen name="family-invite" />
     </Stack>
   );
 }
