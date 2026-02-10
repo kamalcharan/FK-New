@@ -281,8 +281,6 @@ export default function AddRenewalScreen() {
     setCurrentPreset(preset);
     prefillForm(preset);
     setStep('form');
-    // Clear selected presets since we're starting fresh
-    setSelectedPresets(new Set());
   };
 
   // Handle skipping suggestions
