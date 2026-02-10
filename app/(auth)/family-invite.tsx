@@ -1,5 +1,5 @@
 // app/(auth)/family-invite.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Share, ScrollView, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Share, ScrollView, Modal, TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -80,6 +80,7 @@ export default function FamilyInviteScreen() {
   const [showMoreRelations, setShowMoreRelations] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   // Animation refs for floating bubbles
   const floatAnimations = useRef(
@@ -196,14 +197,7 @@ export default function FamilyInviteScreen() {
   };
 
   const handleSkip = () => {
-    Alert.alert(
-      'Skip inviting family?',
-      'Your vault holds critical family information — insurance, loans, compliance. Inviting members ensures nothing is ever lost.\n\nAre you sure you want to skip?',
-      [
-        { text: 'Invite Now', style: 'cancel' },
-        { text: 'Skip', style: 'destructive', onPress: handleContinue },
-      ]
-    );
+    setShowSkipModal(true);
   };
 
   const displayName = useMemo(() => {
@@ -409,6 +403,47 @@ export default function FamilyInviteScreen() {
               onPress={() => setShowMoreRelations(false)}
             >
               <Text style={styles.cancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Skip Confirmation Modal */}
+      <Modal
+        visible={showSkipModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSkipModal(false)}
+      >
+        <View style={styles.skipModalOverlay}>
+          <View style={styles.skipModalCard}>
+            <View style={styles.skipModalIconWrap}>
+              <Ionicons name="people-outline" size={32} color={Colors.warning} />
+            </View>
+
+            <Text style={styles.skipModalTitle}>Skip inviting family?</Text>
+            <Text style={styles.skipModalMessage}>
+              Your vault holds critical family information — insurance, loans, compliance. Inviting members ensures nothing is ever lost.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.skipModalPrimaryBtn}
+              onPress={() => setShowSkipModal(false)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people" size={18} color={Colors.background} />
+              <Text style={styles.skipModalPrimaryText}>Invite Now</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.skipModalSecondaryBtn}
+              onPress={() => {
+                setShowSkipModal(false);
+                handleContinue();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.skipModalSecondaryText}>Skip for now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -685,5 +720,73 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+
+  // Skip confirmation modal
+  skipModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  skipModalCard: {
+    width: '100%',
+    backgroundColor: Colors.inputBackground,
+    borderRadius: BorderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    padding: Spacing.xl,
+    alignItems: 'center',
+  },
+  skipModalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.warningMuted,
+    borderWidth: 1,
+    borderColor: Colors.warningBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  skipModalTitle: {
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 22,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  skipModalMessage: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  skipModalPrimaryBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: 16,
+    marginBottom: Spacing.md,
+  },
+  skipModalPrimaryText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    color: Colors.background,
+  },
+  skipModalSecondaryBtn: {
+    paddingVertical: Spacing.sm,
+  },
+  skipModalSecondaryText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: Colors.textMuted,
   },
 });
